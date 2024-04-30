@@ -1,21 +1,24 @@
-version: "3.3"
+version: "3"
 
 services:
 
   whaleyeah:
     image: python:3.12
     restart: always
+    ports:
+      - "127.0.0.1:10000:10000"
     volumes:
       - ./whaleyeah:/whaleyeah
       - ./bot.py:/bot.py
+      - ./entrypoint.sh:/entrypoint.sh
       - ./etc/config.json:/config.json
       - ./requirements.txt:/requirements.txt
+      - whaleyeah-tmp:/tmp
       - whaleyeah-sitepackages:/usr/local/lib/python3.12/site-packages
-      - type: tmpfs
-        target: /tmp
 
     working_dir: /
     command: python bot.py -c /config.json
+    entrypoint: /entrypoint.sh
     depends_on:
       - whaleyeah-mongodb
       - whaleyeah-requirements
@@ -27,11 +30,8 @@ services:
     volumes:
       - ./etc/mongod.conf:/etc/mongod.conf
       - ./database:/data/db
-    volumes_from:
-      - whaleyeah
+      - whaleyeah-tmp:/tmp
 
-  whaleyeah-requirements:
-    image: python:3.12
-    volumes_from:
-      - whaleyeah
-    command: pip install -r /requirements.txt
+volumes:
+  whaleyeah-tmp:
+  whaleyeah-sitepackages:
