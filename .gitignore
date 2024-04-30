@@ -129,6 +129,10 @@ env.bak/
 venv.bak/
 config.json
 
+*.db
+*.sqlite
+*.sqlite3
+
 # Spyder project settings
 .spyderproject
 .spyproject

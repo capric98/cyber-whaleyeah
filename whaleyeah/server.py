@@ -2,12 +2,13 @@ import logging
 import json
 
 from os import PathLike
+from importlib import import_module
 
 from telegram import Update
 from telegram.ext import Application, ContextTypes
 from telegram.ext import CommandHandler
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def hello_world(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     await update.message.reply_markdown(
         "`Hello World!`"
@@ -17,32 +18,36 @@ def serve_config(config: PathLike) -> None:
     with open(config, "r", encoding="utf-8") as f:
         config = json.load(f)
 
+    if "log_level" not in config: config["log_level"] = "info"
+
     logging.basicConfig(
-        format="[%(levelname)s] %(asctime)s - %(name)s - %(message)s", level=logging.INFO
+        format="[%(levelname)s] %(asctime)s - %(name)s - %(message)s", level=logging.getLevelName(config["log_level"].upper()),
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logger = logging.getLogger(__name__)
 
+
     app = Application.builder().token(config["token"]).build()
+    app.add_handler(CommandHandler("start", hello_world))
 
-    for plugin in config["plugins"]:
-        logger.debug(f"Init plugin={plugin}.")
-    # app.add_handler()
+    plugins = config["plugins"]
+    for (pname, pconf) in plugins.items():
+        logger.info(f"Dynamically load plugin => {pname}...")
+        plugin  = import_module(f"{__package__}.plugins.{pname}")
+        handler = getattr(plugin, "get_handler")(pconf)
 
-    app.add_handler(CommandHandler("start", start))
+        # logger.info(f"Added handler '{handler}'.")
+        app.add_handler(handler)
+
 
     logger.info(f"Listening {config["listen"]}")
-    # app.run_polling(allowed_updates=Update.ALL_TYPES)
-
-    def _get_url_path(url: str) -> str:
-        url = url.split("://")[-1]
-        return url.split("/", maxsplit=1)[-1]
-
     app.run_webhook(
         listen=config["listen"].split(":")[0],
         port=int(config["listen"].split(":")[1]),
         webhook_url=config["webhook"],
-        url_path=_get_url_path(config["webhook"]),
+        url_path=config["webhook"].split("://")[-1].split("/", maxsplit=1)[-1],
         allowed_updates=Update.ALL_TYPES,
         secret_token=None if "secret" not in config else config["secret"],
     )
+    # app.run_polling(allowed_updates=Update.ALL_TYPES)
