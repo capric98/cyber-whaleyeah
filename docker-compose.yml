@@ -1,0 +1,33 @@
+services:
+
+  whaleyeah:
+    image: python:3.12
+    volumes:
+      - ./whaleyeah:/whaleyeah
+      - ./bot.py:/bot.py
+      - ./etc/config.json:/config.json
+      - ./requirements.txt:/requirements.txt
+      - whaleyeah-sitepackages:/usr/local/lib/python3.12/site-packages
+      - type: tmpfs
+        target: /tmp
+
+    working_dir: /
+    command: python bot.py -c /config.json
+    depends_on:
+      - whaleyeah-mongodb
+      - whaleyeah-requirements
+
+  whaleyeah-mongodb:
+    image: mongodb/mongodb-community-server:latest
+    command: mongod /etc/mongod.conf
+    volumes:
+      - ./etc/mongod.conf:/etc/mongod.conf
+      - ./database:/data/db
+    volumes_from:
+      - whaleyeah
+
+  whaleyeah-requirements:
+    image: python:3.12
+    volumes_from:
+      - whaleyeah
+    command: pip install -r /requirements.txt
