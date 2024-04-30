@@ -8,6 +8,8 @@ from telegram import Update
 from telegram.ext import Application, ContextTypes
 from telegram.ext import CommandHandler
 
+from .iwaku import iwaku_handler
+
 async def hello_world(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     await update.message.reply_markdown(
@@ -30,6 +32,7 @@ def serve_config(config: PathLike) -> None:
 
     app = Application.builder().token(config["token"]).build()
     app.add_handler(CommandHandler("start", hello_world))
+    app.add_handler(iwaku_handler()) # TODO: handle all messages and search queries
 
     plugins = config["plugins"]
     for (pname, pconf) in plugins.items():
