@@ -2,6 +2,7 @@ services:
 
   whaleyeah:
     image: python:3.12
+    restart: always
     volumes:
       - ./whaleyeah:/whaleyeah
       - ./bot.py:/bot.py
@@ -19,7 +20,8 @@ services:
 
   whaleyeah-mongodb:
     image: mongodb/mongodb-community-server:latest
-    command: mongod /etc/mongod.conf
+    restart: always
+    command: mongod --config /etc/mongod.conf
     volumes:
       - ./etc/mongod.conf:/etc/mongod.conf
       - ./database:/data/db
