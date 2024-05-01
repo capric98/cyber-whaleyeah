@@ -8,7 +8,7 @@ from telegram import Update
 from telegram.ext import Application, ContextTypes
 from telegram.ext import CommandHandler
 
-from .iwaku import iwaku_handler
+from .iwaku import iwaku_handler, init_database
 
 async def hello_world(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -34,14 +34,19 @@ def serve_config(config: PathLike) -> None:
     app.add_handler(CommandHandler("start", hello_world))
     app.add_handler(iwaku_handler()) # TODO: handle all messages and search queries
 
+    init_database(config["database"])
+
     plugins = config["plugins"]
     for (pname, pconf) in plugins.items():
-        logger.info(f"Dynamically load plugin => {pname}...")
-        plugin  = import_module(f"{__package__}.plugins.{pname}")
-        handler = getattr(plugin, "get_handler")(pconf)
+        try:
+            logger.info(f"Dynamically load plugin => {pname}...")
+            plugin  = import_module(f"{__package__}.plugins.{pname}")
+            handler = getattr(plugin, "get_handler")(pconf)
 
-        # logger.info(f"Added handler '{handler}'.")
-        app.add_handler(handler)
+            # logger.info(f"Added handler '{handler}'.")
+            app.add_handler(handler)
+        except Exception as e:
+            logger.warning(f"Error: '{e}'")
 
 
     logger.info(f"Listening {config["listen"]}")
