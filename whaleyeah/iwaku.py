@@ -3,8 +3,8 @@ import logging
 
 import jieba
 
-from telegram import Update, Message
-from telegram.ext import MessageHandler, ContextTypes
+from telegram import Update
+from telegram.ext import MessageHandler, InlineQueryHandler, ContextTypes
 from motor.motor_asyncio import AsyncIOMotorClient
 from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
 
@@ -30,11 +30,29 @@ mob = MobClass()
 
 logger   = logging.getLogger(__name__)
 
-def iwaku_handler() -> MessageHandler:
+def iwaku_history_handler() -> MessageHandler:
     jieba.setLogLevel(logger.getEffectiveLevel())
-    return MessageHandler(filters=None, callback=_iwaku_callback)
+    return MessageHandler(filters=None, callback=_iwaku_history_callback)
+def iwaku_inline_handler() -> InlineQueryHandler:
+    return InlineQueryHandler(callback=_iwaku_inline_callback)
 
-async def _iwaku_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+
+def init_database(db_config):
+    global mob
+
+    try:
+        client = AsyncIOMotorClient(db_config["uri"], io_loop=asyncio.get_event_loop())
+        mob.database = client.get_database(db_config["db_name"])
+        mob.history  = mob.database.get_collection("history")
+        mob.tokens   = mob.database.get_collection("tokens")
+    except Exception as e:
+        logger.warning(f"Error: '{e}'")
+
+def trim_tokens(tokens: list[str]) -> list[str]:
+    return [v for v in tokens if len(v.encode())>1]
+
+
+async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context: logger.warning("context is None")
 
     prefix = []
@@ -42,7 +60,6 @@ async def _iwaku_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     msg = update.effective_message
     if msg:
-        if msg==update.edited_message: pass # TODO: handle edited message
         if msg.text:
             text = msg.text
         else:
@@ -62,57 +79,40 @@ async def _iwaku_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     text = "".join(seg) # add prefix
 
-    # content, date, user
     jmsg = msg.to_json()
-    # logger.info(jmsg)
-    # logger.info(sys.getsizeof(jmsg)) ~1KB
+    logger.debug(jmsg)
     logger.debug(text)
+    # logger.info(sys.getsizeof(jmsg)) ~1KB
 
-    mob_doc = {
-        "from": msg.from_user.id,
-        "chat": msg.chat_id,
-        "mid": msg.id,
-        "text": text,
-        "date": msg.date,
-        "json": jmsg, # original json
-        "tokens": seg,
-    }
 
     try:
-        await mob.history.insert_one(mob_doc)
-        # {"$and": [{"chat": msg.chat_id, "tokens": a, "tokens": b ...}]}
+        mob_doc = {
+            "from": msg.from_user.id,
+            "chat": msg.chat_id,
+            "mid": msg.id,
+            "text": text,
+            "date": msg.date,
+            "json": jmsg, # original json
+            "tokens": trim_tokens(seg),
+        }
+        if msg==update.edited_message:
+            await mob.history.find_one_and_replace(
+                {"$and": [
+                    {
+                        "from": msg.from_user.id,
+                        "chat": msg.chat_id,
+                        "mid": msg.id,
+                    }
+                ]},
+                mob_doc,
+            )
+        else:
+            await mob.history.insert_one(mob_doc)
+
     except Exception as e:
         logger.warning(f"failed to write history: {e}")
 
 
-    # try:
-    #     mob_doc.pop("json")
-    #     for token in seg:
-    #         token = token.strip()
-    #         if token:
-    #             if await mob.tokens.count_documents({"token": token}, limit=1):
-    #                 await mob.tokens.update_one(
-    #                     {"token": token},
-    #                     {"$push": {"messages": mob_doc}},
-    #                 )
-    #             else:
-    #                 await mob.tokens.insert_one({
-    #                     "token": token,
-    #                     "messages": [mob_doc],
-    #                 })
-    #     # search {"$and": [{"token": token, "messages.mid": 134}]}
-    # except Exception as e:
-    #     logger.warning(f"failed to write tokens: {e}")
-
-
-
-def init_database(db_config):
-    global mob
-
-    try:
-        client = AsyncIOMotorClient(db_config["uri"], io_loop=asyncio.get_event_loop())
-        mob.database = client.get_database(db_config["db_name"])
-        mob.history  = mob.database.get_collection("history")
-        mob.tokens   = mob.database.get_collection("tokens")
-    except Exception as e:
-        logger.warning(f"Error: '{e}'")
+async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # {"$and": [{"chat": msg.chat_id, "from": msg.from_user.id, "tokens": a, "tokens": b ...}]}
+    pass

@@ -8,7 +8,7 @@ from telegram import Update
 from telegram.ext import Application, ContextTypes
 from telegram.ext import CommandHandler
 
-from .iwaku import iwaku_handler, init_database
+from .iwaku import init_database, iwaku_history_handler, iwaku_inline_handler
 
 async def hello_world(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -32,7 +32,8 @@ def serve_config(config: PathLike) -> None:
 
     app = Application.builder().token(config["token"]).build()
     app.add_handler(CommandHandler("start", hello_world))
-    app.add_handler(iwaku_handler()) # TODO: handle all messages and search queries
+    app.add_handler(iwaku_history_handler())
+    # app.add_handler(iwaku_inline_handler()) # TODO: finish inline
 
     init_database(config["database"])
 
