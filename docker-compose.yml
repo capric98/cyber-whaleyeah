@@ -24,7 +24,7 @@ services:
 
   whaleyeah-mongodb:
     image: mongodb/mongodb-community-server:latest
-    user: $UID
+    user: $UID:$GID
     restart: always
     command: mongod --config /etc/mongod.conf
     volumes:

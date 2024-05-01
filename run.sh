@@ -1,4 +1,4 @@
 #!/bin/bash
 mkdir -p database
 docker-compose rm -f
-docker-compose up -d
+UID="$(id -u)" GID="$(id -g)" docker-compose up -d
