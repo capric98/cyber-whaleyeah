@@ -21,7 +21,6 @@ services:
     entrypoint: /entrypoint.sh
     depends_on:
       - whaleyeah-mongodb
-      - whaleyeah-requirements
 
   whaleyeah-mongodb:
     image: mongodb/mongodb-community-server:latest
