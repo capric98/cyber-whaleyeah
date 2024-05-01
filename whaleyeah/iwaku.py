@@ -52,6 +52,7 @@ async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_
 
     msg = update.effective_message
     if msg.via_bot: return
+    if msg.forward_origin: return
 
     logger.debug(update)
 
