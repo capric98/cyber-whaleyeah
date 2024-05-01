@@ -129,6 +129,8 @@ env.bak/
 venv.bak/
 config.json
 
+database**
+!database/*.py
 *.db
 *.sqlite
 *.sqlite3
