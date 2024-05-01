@@ -5,8 +5,6 @@ services:
   whaleyeah:
     image: python:3.12
     restart: always
-    ports:
-      - "127.0.0.1:10000:10000"
     volumes:
       - ./whaleyeah:/whaleyeah
       - ./bot.py:/bot.py
