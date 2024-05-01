@@ -8,7 +8,7 @@ from telegram import Update
 from telegram.ext import Application, ContextTypes
 from telegram.ext import CommandHandler
 
-from .iwaku import iwaku_history_handler, iwaku_inline_handler
+from .iwaku import iwaku_history_handler, iwaku_inline_handler, iwaku_locate_handler
 from .database import init_database
 
 async def hello_world(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -35,8 +35,6 @@ def serve_config(config: PathLike) -> None:
 
     app = Application.builder().token(config["token"]).build()
     app.add_handler(CommandHandler("start", hello_world))
-    app.add_handler(iwaku_history_handler())
-    app.add_handler(iwaku_inline_handler()) # TODO: finish inline
 
     plugins = config["plugins"]
     for (pname, pconf) in plugins.items():
@@ -49,6 +47,10 @@ def serve_config(config: PathLike) -> None:
             app.add_handler(handler)
         except Exception as e:
             logger.warning(f"Error: '{e}'")
+
+    app.add_handler(iwaku_inline_handler())
+    app.add_handler(iwaku_locate_handler())
+    app.add_handler(iwaku_history_handler())
 
 
     logger.info(f"Listening {config["listen"]}")

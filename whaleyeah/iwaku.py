@@ -7,7 +7,7 @@ import math
 import jieba
 
 from telegram import Update, InlineQueryResultArticle, InputTextMessageContent
-from telegram.ext import MessageHandler, InlineQueryHandler, ContextTypes
+from telegram.ext import MessageHandler, InlineQueryHandler, ContextTypes, filters
 
 from .database import mob
 
@@ -23,6 +23,8 @@ def iwaku_history_handler() -> MessageHandler:
     return MessageHandler(filters=None, callback=_iwaku_history_callback)
 def iwaku_inline_handler() -> InlineQueryHandler:
     return InlineQueryHandler(callback=_iwaku_inline_callback)
+def iwaku_locate_handler() -> MessageHandler:
+    return MessageHandler(filters=filters.COMMAND, callback=_iwaku_locate_callback)
 
 
 def trim_tokens(tokens: list[str]) -> list[str]:
@@ -40,7 +42,7 @@ def trim_tokens(tokens: list[str]) -> list[str]:
 
 
 async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not context: logger.warning("context is None")
+    if not context: pass
     logger.debug(update)
 
     prefix = []
@@ -109,7 +111,7 @@ async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_
 
 async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # {"$and": [{"chat": msg.chat_id, "from": msg.from_user.id}, {"tokens": a}, {"tokens": b}, ...]}
-    if context: pass
+    if not context: pass
 
     query = update.inline_query.query
     if not query: return
@@ -173,13 +175,29 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
                     id=message['id'],
                     title='{}'.format(eff_text[:100]),
                     description=message['date'].strftime("%Y-%m-%d").ljust(40) + message.from_user.name,
-                    input_message_content=InputTextMessageContent(
-                        '{}<a href="{}">「From {}」</a>'.format(html.escape(eff_text), message['link'], message.from_user.name),parse_mode='html'
-                        ) if
-                    message['link'] != '' or message['id'] < 0 else InputTextMessageContent(
-                        '/locate {}'.format(message['id']))
-                    # input_message_content=InputTextMessageContent('/locate {}'.format(message['id'])),
+                    # input_message_content=InputTextMessageContent(
+                    #     '{}<a href="{}">「From {}」</a>'.format(html.escape(eff_text), message['link'], message.from_user.name),parse_mode='html'
+                    #     ) if
+                    # message['link'] != '' or message['id'] < 0 else InputTextMessageContent(
+                    #     '/locate {}'.format(message['id']))
+                    input_message_content=InputTextMessageContent('/locate {} {}'.format(message.chat_id, message.id)),
                 )
             )
 
         await update.inline_query.answer(results)
+
+
+async def _iwaku_locate_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+
+    msg = update.effective_message
+    if not msg.via_bot: return
+    if not context: pass
+
+    commands = msg.text.strip().split(" ")
+    logger.debug(commands)
+
+    if commands[0].startswith("/locate"):
+        bot = update.get_bot()
+        await bot.forward_message(chat_id=msg.chat_id, from_chat_id=commands[1], message_id=commands[2])
+    else:
+        pass
