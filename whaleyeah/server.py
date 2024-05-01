@@ -31,12 +31,12 @@ def serve_config(config: PathLike) -> None:
     logger = logging.getLogger(__name__)
 
 
+    init_database(config["database"])
+
     app = Application.builder().token(config["token"]).build()
     app.add_handler(CommandHandler("start", hello_world))
     app.add_handler(iwaku_history_handler())
-    # app.add_handler(iwaku_inline_handler()) # TODO: finish inline
-
-    init_database(config["database"])
+    app.add_handler(iwaku_inline_handler()) # TODO: finish inline
 
     plugins = config["plugins"]
     for (pname, pconf) in plugins.items():
