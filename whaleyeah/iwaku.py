@@ -166,17 +166,19 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
         for doc in docs:
             doc_update = update.de_json(json.loads(doc["json"]), update.get_bot())
             message    = doc_update.effective_message
+            eff_text   = message.text if message.text else message.caption
             logger.debug(doc_update)
             results.append(
                 InlineQueryResultArticle(
                     id=message['id'],
-                    title='{}'.format(message['text'][:100]),
+                    title='{}'.format(eff_text[:100]),
                     description=message['date'].strftime("%Y-%m-%d").ljust(40) + message.from_user.name,
                     input_message_content=InputTextMessageContent(
-                        '{}<a href="{}">「From {}」</a>'.format(html.escape(message['text']), message['link'], message.from_user.name),parse_mode='html'
+                        '{}<a href="{}">「From {}」</a>'.format(html.escape(eff_text), message['link'], message.from_user.name),parse_mode='html'
                         ) if
                     message['link'] != '' or message['id'] < 0 else InputTextMessageContent(
                         '/locate {}'.format(message['id']))
+                    # input_message_content=InputTextMessageContent('/locate {}'.format(message['id'])),
                 )
             )
 
