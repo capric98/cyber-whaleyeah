@@ -8,7 +8,8 @@ from telegram import Update
 from telegram.ext import Application, ContextTypes
 from telegram.ext import CommandHandler
 
-from .iwaku import init_database, iwaku_history_handler, iwaku_inline_handler
+from .iwaku import iwaku_history_handler, iwaku_inline_handler
+from .database import init_database
 
 async def hello_world(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user

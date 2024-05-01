@@ -5,28 +5,9 @@ import jieba
 
 from telegram import Update
 from telegram.ext import MessageHandler, InlineQueryHandler, ContextTypes
-from motor.motor_asyncio import AsyncIOMotorClient
-from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
 
-class MobClass:
-    def __init__(self) -> None:
-        self._database = None
-        self._history  = None
-        self._tokens   = None
-    def __setattr__(self, name, value):
-        self.__dict__[f"_{name}"] = value
+from .database import mob
 
-    @property
-    def database(self) -> AsyncIOMotorDatabase:
-        return self._database
-    @property
-    def history(self) -> AsyncIOMotorCollection:
-        return self._history
-    @property
-    def tokens(self) -> AsyncIOMotorCollection:
-        return self._tokens
-
-mob = MobClass()
 
 logger   = logging.getLogger(__name__)
 
@@ -37,19 +18,18 @@ def iwaku_inline_handler() -> InlineQueryHandler:
     return InlineQueryHandler(callback=_iwaku_inline_callback)
 
 
-def init_database(db_config):
-    global mob
-
-    try:
-        client = AsyncIOMotorClient(db_config["uri"], io_loop=asyncio.get_event_loop())
-        mob.database = client.get_database(db_config["db_name"])
-        mob.history  = mob.database.get_collection("history")
-        mob.tokens   = mob.database.get_collection("tokens")
-    except Exception as e:
-        logger.warning(f"Error: '{e}'")
-
 def trim_tokens(tokens: list[str]) -> list[str]:
-    return [v for v in tokens if len(v.encode())>1]
+    results = []
+    tmemory = set()
+
+    for v in tokens:
+        v = v.strip()
+        if len(v.encode())<=1: continue
+        if v not in tmemory:
+            tmemory.add(v)
+            results.append(v)
+
+    return results
 
 
 async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -114,5 +94,5 @@ async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # {"$and": [{"chat": msg.chat_id, "from": msg.from_user.id, "tokens": a, "tokens": b ...}]}
+    # {"$and": [{"chat": msg.chat_id, "from": msg.from_user.id}, {"tokens": a}, {"tokens": b}, ...]}
     pass
