@@ -6,10 +6,11 @@ import math
 
 import jieba
 
-from telegram import Update, InlineQueryResultArticle, InputTextMessageContent
+from telegram import Update, InlineQueryResultArticle, InputTextMessageContent, ReplyParameters
 from telegram.ext import MessageHandler, InlineQueryHandler, ContextTypes, filters
 
 from .database import mob
+from .megaphone import _megaphone_callback
 
 
 SEARCH_PAGE_SIZE = 10
@@ -43,7 +44,6 @@ def trim_tokens(tokens: list[str]) -> list[str]:
 
 async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context: pass
-    logger.debug(update)
 
     prefix = []
     text   = ""
@@ -52,6 +52,8 @@ async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_
 
     msg = update.effective_message
     if msg.via_bot: return
+
+    logger.debug(update)
 
     if msg:
         if msg.text:
@@ -67,6 +69,9 @@ async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_
             if msg.voice: prefix = ["[语音]", " "]
 
     if not text: return
+    if text.startswith("/"):
+        if await _megaphone_callback(update, context):
+            return
 
     seg = await asyncio.to_thread(jieba.cut_for_search, text)
     seg = prefix + [s for s in seg]
@@ -132,18 +137,18 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
         # check priviledge
         try:
             # update.chat_member
-            xx = await context.bot.get_chat_administrators(chat_id=mob.GROUP_ID)
+            xx = await update.get_bot().get_chat_administrators(chat_id=mob.GROUP_ID)
             logger.debug(xx)
             if xx is None:
                 return
             xx = [it.user.id for it in xx]
             if update.inline_query.from_user.id not in xx:
                 return
-        except:
-            return
+        except Exception as e:
+            logger.warning(e)
 
 
-        filter = {"$and": [{"chat": mob.GROUP_ID}] + [{"tokens": v} for v in query_tokens]}
+        filter = {"$and": [{"tokens": v} for v in query_tokens]}
         logger.debug(filter)
 
 
@@ -174,7 +179,7 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
                 InlineQueryResultArticle(
                     id=message['id'],
                     title='{}'.format(eff_text[:100]),
-                    description=message['date'].strftime("%Y-%m-%d").ljust(40) + message.from_user.name,
+                    description=message['date'].strftime("%Y-%m-%d").ljust(40) + message.from_user.full_name,
                     # input_message_content=InputTextMessageContent(
                     #     '{}<a href="{}">「From {}」</a>'.format(html.escape(eff_text), message['link'], message.from_user.name),parse_mode='html'
                     #     ) if
@@ -198,6 +203,14 @@ async def _iwaku_locate_callback(update: Update, context: ContextTypes.DEFAULT_T
 
     if commands[0].startswith("/locate"):
         bot = update.get_bot()
-        await bot.forward_message(chat_id=msg.chat_id, from_chat_id=commands[1], message_id=commands[2])
+        # await bot.forward_message(chat_id=msg.chat_id, from_chat_id=commands[1], message_id=commands[2])
+        try:
+            await asyncio.gather(
+                update.message.delete(),
+                bot.send_message(chat_id=msg.chat_id, text="^", reply_parameters=ReplyParameters(chat_id=commands[1], message_id=commands[2])),
+            )
+        except:
+            pass
+
     else:
-        pass
+        await _megaphone_callback(update, context)
