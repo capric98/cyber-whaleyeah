@@ -10,6 +10,7 @@ services:
     volumes:
       - ./whaleyeah:/whaleyeah
       - ./bot.py:/bot.py
+      - ./database:/data/db
       - ./entrypoint.sh:/entrypoint.sh
       - ./etc/config.json:/config.json
       - ./requirements.txt:/requirements.txt
