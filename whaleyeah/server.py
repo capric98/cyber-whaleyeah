@@ -11,10 +11,17 @@ from telegram.ext import CommandHandler
 from .iwaku import iwaku_history_handler, iwaku_inline_handler, iwaku_locate_handler
 from .database import init_database
 
+
+plugins_list = []
+
 async def hello_world(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
     await update.message.reply_markdown(
         "`Hello World!`"
+    )
+
+async def _helper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_markdown(
+        "Enabled Plugins:\n  - `" + "`\n  - ".join(plugins_list) + "`"
     )
 
 def serve_config(config: PathLike) -> None:
@@ -35,7 +42,9 @@ def serve_config(config: PathLike) -> None:
 
     app = Application.builder().token(config["token"]).build()
     app.add_handler(CommandHandler("start", hello_world))
+    app.add_handler(CommandHandler("help", _helper))
 
+    global plugins_list
     plugins = config["plugins"]
     for (pname, pconf) in plugins.items():
         try:
@@ -47,10 +56,14 @@ def serve_config(config: PathLike) -> None:
             app.add_handler(handler)
         except Exception as e:
             logger.warning(f"Error: '{e}'")
+        else:
+            plugins_list.append(pname)
 
     app.add_handler(iwaku_inline_handler())
     app.add_handler(iwaku_locate_handler())
     app.add_handler(iwaku_history_handler())
+
+    plugins_list = ["iwaku"] + plugins_list
 
 
     logger.info(f"Listening {config["listen"]}")
