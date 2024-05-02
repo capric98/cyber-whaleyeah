@@ -188,7 +188,7 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
                     #     ) if
                     # message['link'] != '' or message['id'] < 0 else InputTextMessageContent(
                     #     '/locate {}'.format(message['id']))
-                    input_message_content=InputTextMessageContent('/locate {} {}'.format(message.chat_id, message.id)) if message.id>0 else InputTextMessageContent(
+                    input_message_content=InputTextMessageContent('/portal {} {}'.format(message.chat_id, message.id)) if message.id>0 else InputTextMessageContent(
                         # '{}<a href="{}">「From {}」</a>'.format(html.escape(eff_text), message['link'], message.from_user.name),parse_mode='html'
                         '{}<a>「From {}」</a>'.format(html.escape(eff_text), message.from_user.full_name),parse_mode='html'
                     ),
@@ -207,7 +207,7 @@ async def _iwaku_locate_callback(update: Update, context: ContextTypes.DEFAULT_T
     commands = msg.text.strip().split(" ")
     logger.debug(commands)
 
-    if commands[0].startswith("/locate"):
+    if commands[0].startswith("/portal"):
         bot = update.get_bot()
         # await bot.forward_message(chat_id=msg.chat_id, from_chat_id=commands[1], message_id=commands[2])
         try:
