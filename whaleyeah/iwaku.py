@@ -3,6 +3,7 @@ import html
 import json
 import logging
 import math
+import time
 
 import jieba
 
@@ -154,14 +155,18 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
         logger.debug(filter)
 
 
+        query_start_time = time.time()
+
         cursor = mob.history.find(filter)
         cursor = cursor.sort("date", -1)
-
 
         # total = mob.history.count_documents(filter)
         docs  = await cursor.to_list(length=page*SEARCH_PAGE_SIZE)
         # docs  = await cursor.to_list(length=None)
         count = len(docs)
+
+        query_elapsed = time.time() - query_start_time
+        logger.info(f"doc query in {1000*query_elapsed:.2} ms")
 
 
         results = [
