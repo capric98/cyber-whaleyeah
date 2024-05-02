@@ -77,7 +77,7 @@ async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_
     seg = await asyncio.to_thread(jieba.cut_for_search, text)
     seg = prefix + [s for s in seg]
 
-    text = "".join(seg) # add prefix
+    text = "".join(prefix) + text
 
     jmsg = update.to_json()
     logger.debug(jmsg)
@@ -171,7 +171,10 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
             )
         ]
 
-        for doc in docs:
+        for k in range(SEARCH_PAGE_SIZE*(page-1), SEARCH_PAGE_SIZE*page+1):
+
+            doc = docs[k]
+
             doc_update = update.de_json(json.loads(doc["json"]), update.get_bot())
             message    = doc_update.effective_message
             eff_text   = message.text if message.text else message.caption
