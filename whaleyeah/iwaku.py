@@ -201,7 +201,7 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
 async def _iwaku_locate_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     msg = update.effective_message
-    if not msg.via_bot: return
+    # if not msg.via_bot: return
     if not context: pass
 
     commands = msg.text.strip().split(" ")
