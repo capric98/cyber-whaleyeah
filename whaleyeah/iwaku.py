@@ -186,7 +186,10 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
                     #     ) if
                     # message['link'] != '' or message['id'] < 0 else InputTextMessageContent(
                     #     '/locate {}'.format(message['id']))
-                    input_message_content=InputTextMessageContent('/locate {} {}'.format(message.chat_id, message.id)),
+                    input_message_content=InputTextMessageContent('/locate {} {}'.format(message.chat_id, message.id)) if message.id>0 else InputTextMessageContent(
+                        # '{}<a href="{}">「From {}」</a>'.format(html.escape(eff_text), message['link'], message.from_user.name),parse_mode='html'
+                        '{}<a>「From {}」</a>'.format(html.escape(eff_text), message.from_user.full_name),parse_mode='html'
+                    ),
                 )
             )
 
