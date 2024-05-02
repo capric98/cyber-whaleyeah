@@ -23,6 +23,8 @@ async def _megaphone_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     commands[0] = commands[0][1:]
     if commands[0].isascii(): return False
 
+    if len(commands)<3: commands = commands + [""]*(3-len(commands))
+
     S_text = f"<a href=\"tg://user?id={update.effective_sender.id}\">{update.effective_sender.full_name}</a>"
     if update.effective_message.reply_to_message:
         ouser = update.effective_message.reply_to_message.from_user
