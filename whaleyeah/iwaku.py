@@ -171,8 +171,7 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
             )
         ]
 
-        for k in range(SEARCH_PAGE_SIZE*(page-1), SEARCH_PAGE_SIZE*page+1):
-
+        for k in range(SEARCH_PAGE_SIZE*(page-1), min(SEARCH_PAGE_SIZE*page+1, len(docs))):
             doc = docs[k]
 
             doc_update = update.de_json(json.loads(doc["json"]), update.get_bot())
