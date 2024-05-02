@@ -161,7 +161,7 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
         cursor = mob.history.find(filter)
         cursor = cursor.sort("date", -1)
 
-        count = mob.history.count_documents(filter)
+        count = await mob.history.count_documents(filter)
         # docs  = await cursor.to_list(length=page*SEARCH_PAGE_SIZE)
         # docs  = await cursor.to_list(length=None)
         # count = len(cursor)
