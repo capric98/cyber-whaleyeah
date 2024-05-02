@@ -159,15 +159,16 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 
         # total = mob.history.count_documents(filter)
-        # docs  = await cursor.to_list(length=min(page*SEARCH_PAGE_SIZE, total))
-        docs  = await cursor.to_list(length=None)
+        docs  = await cursor.to_list(length=page*SEARCH_PAGE_SIZE)
+        # docs  = await cursor.to_list(length=None)
         count = len(docs)
 
 
         results = [
             InlineQueryResultArticle(
                 id='info',
-                title='Total:{}. Page {} of {}'.format(count, page, math.ceil(count / SEARCH_PAGE_SIZE)),
+                # title='Total:{}. Page {} of {}'.format(count, page, math.ceil(count / SEARCH_PAGE_SIZE)),
+                title='Total:{}. Page {} of ?'.format(count, page),
                 input_message_content=InputTextMessageContent('/help')
             )
         ]
