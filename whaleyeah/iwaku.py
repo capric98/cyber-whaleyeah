@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def iwaku_history_handler() -> MessageHandler:
+    mob.history.create_index("tokens")
     jieba.setLogLevel(logger.getEffectiveLevel())
     return MessageHandler(filters=None, callback=_iwaku_history_callback)
 def iwaku_inline_handler() -> InlineQueryHandler:
@@ -161,9 +162,9 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
         cursor = cursor.sort("date", -1)
 
         # total = mob.history.count_documents(filter)
-        docs  = await cursor.to_list(length=page*SEARCH_PAGE_SIZE)
+        # docs  = await cursor.to_list(length=page*SEARCH_PAGE_SIZE)
         # docs  = await cursor.to_list(length=None)
-        count = len(docs)
+        count = len(cursor)
 
         query_elapsed = time.time() - query_start_time
         logger.info(f"query for \"{query}\" in {1000*query_elapsed:.2f} ms")
@@ -172,14 +173,14 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
         results = [
             InlineQueryResultArticle(
                 id='info',
-                # title='Total:{}. Page {} of {}'.format(count, page, math.ceil(count / SEARCH_PAGE_SIZE)),
-                title='Total:{}. Page {} of ?'.format(count, page),
+                title='Total:{}. Page {} of {}'.format(count, page, math.ceil(count / SEARCH_PAGE_SIZE)),
+                # title='Total:{}. Page {} of ?'.format(count, page),
                 input_message_content=InputTextMessageContent('/help')
             )
         ]
 
-        for k in range(SEARCH_PAGE_SIZE*(page-1), min(SEARCH_PAGE_SIZE*page+1, len(docs))):
-            doc = docs[k]
+        for _ in range(SEARCH_PAGE_SIZE*(page-1), min(SEARCH_PAGE_SIZE*page+1, count)):
+            doc = await cursor.next()
 
             doc_update = update.de_json(json.loads(doc["json"]), update.get_bot())
             message    = doc_update.effective_message
