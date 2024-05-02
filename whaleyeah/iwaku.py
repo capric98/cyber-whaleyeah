@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 def iwaku_history_handler() -> MessageHandler:
-    asyncio.run(mob.history.create_index("tokens"))
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(loop.create_task(mob.history.create_index("tokens")))
     jieba.setLogLevel(logger.getEffectiveLevel())
     return MessageHandler(filters=None, callback=_iwaku_history_callback)
 def iwaku_inline_handler() -> InlineQueryHandler:
