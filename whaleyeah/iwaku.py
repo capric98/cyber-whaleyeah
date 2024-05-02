@@ -146,7 +146,8 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
             if update.inline_query.from_user.id not in xx:
                 return
         except Exception as e:
-            logger.warning(e)
+            logger.warning(f"failed to check priviledge: {e}")
+            return
 
 
         filter = {"$and": [{"tokens": v} for v in query_tokens]}
@@ -201,7 +202,7 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
 async def _iwaku_locate_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     msg = update.effective_message
-    if not msg.via_bot: return
+    # if not msg.via_bot: return
     if not context: pass
 
     commands = msg.text.strip().split(" ")
@@ -211,9 +212,13 @@ async def _iwaku_locate_callback(update: Update, context: ContextTypes.DEFAULT_T
         bot = update.get_bot()
         # await bot.forward_message(chat_id=msg.chat_id, from_chat_id=commands[1], message_id=commands[2])
 
-        if msg.chat_id!=mob.GROUP_ID:
-            if commands[1]=="-100"+str(mob.GROUP_ID):
-                commands[1] = "-100"+str(mob.GROUP_ID)
+        to_chat = str(msg.chat_id)
+
+        if to_chat!=str(mob.GROUP_ID):
+            if str(mob.GROUP_ID).endswith(to_chat):
+                to_chat = str(mob.GROUP_ID)
+        if str(mob.GROUP_ID).endswith(commands[1]):
+            commands[1] = str(mob.GROUP_ID)
 
         try:
             await asyncio.gather(
