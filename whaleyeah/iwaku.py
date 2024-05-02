@@ -179,7 +179,7 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
             )
         ]
 
-        if page!=1: await cursor.skip(SEARCH_PAGE_SIZE*(page-1))
+        if page!=1: cursor = cursor.skip(SEARCH_PAGE_SIZE*(page-1))
         for _ in range(SEARCH_PAGE_SIZE*(page-1), min(SEARCH_PAGE_SIZE*page+1, count)):
             doc = await cursor.next()
 
