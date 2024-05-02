@@ -23,7 +23,6 @@ async def _megaphone_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     commands[0] = commands[0][1:]
     if commands[0].isascii(): return False
 
-    if len(commands)<3: commands = commands + [""]*(3-len(commands))
 
     S_text = f"<a href=\"tg://user?id={update.effective_sender.id}\">{update.effective_sender.full_name}</a>"
     if update.effective_message.reply_to_message:
@@ -35,11 +34,15 @@ async def _megaphone_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         O_text = "自己"
 
+    if len(commands)<2:
+        commands = commands + [""]*(2-len(commands))
+        if O_text=="自己": O_text=""
+
     await asyncio.gather(
         update.effective_message.delete(),
         update.get_bot().send_message(
             chat_id=update.effective_chat.id,
-            text=f"{S_text} {commands[0]} {O_text} {commands[1]}",
+            text=f"{S_text} {commands[0]} {O_text} {commands[1]}".strip(),
             parse_mode=ParseMode.HTML,
         )
     )
