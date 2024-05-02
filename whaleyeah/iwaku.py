@@ -166,7 +166,7 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
         count = len(docs)
 
         query_elapsed = time.time() - query_start_time
-        logger.info(f"doc query in {1000*query_elapsed:.2} ms")
+        logger.info(f"doc query in {1000*query_elapsed:.2f} ms")
 
 
         results = [
