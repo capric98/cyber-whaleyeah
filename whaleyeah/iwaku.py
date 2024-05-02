@@ -201,7 +201,7 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
 async def _iwaku_locate_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     msg = update.effective_message
-    # if not msg.via_bot: return
+    if not msg.via_bot: return
     if not context: pass
 
     commands = msg.text.strip().split(" ")
@@ -212,11 +212,13 @@ async def _iwaku_locate_callback(update: Update, context: ContextTypes.DEFAULT_T
         # await bot.forward_message(chat_id=msg.chat_id, from_chat_id=commands[1], message_id=commands[2])
 
         if msg.chat_id!=mob.GROUP_ID:
-            logger.warning(f"chat_id {msg.chat_id} != {mob.GROUP_ID} !")
+            if commands[1]=="-100"+str(mob.GROUP_ID):
+                commands[1] = "-100"+str(mob.GROUP_ID)
+
         try:
             await asyncio.gather(
                 update.message.delete(),
-                bot.send_message(chat_id=mob.GROUP_ID, text="^", reply_parameters=ReplyParameters(chat_id=commands[1], message_id=commands[2])),
+                bot.send_message(chat_id=msg.chat_id, text="^", reply_parameters=ReplyParameters(chat_id=commands[1], message_id=commands[2])),
             )
         except:
             pass
