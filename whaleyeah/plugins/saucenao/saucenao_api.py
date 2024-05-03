@@ -8,6 +8,9 @@ import requests
 from aiohttp import ClientTimeout
 
 
+_TIMEOUT_ = 10
+
+
 class DB(enum.auto):
     HMagazines = 0
     HGame_CG = 2
@@ -307,7 +310,7 @@ class AIOSauceNao(SauceNao):
         self._session = None
 
     async def __aenter__(self):
-        self._session = aiohttp.ClientSession(loop=asyncio.get_event_loop(), timeout=ClientTimeout(3))
+        self._session = aiohttp.ClientSession(loop=asyncio.get_event_loop(), timeout=ClientTimeout(_TIMEOUT_))
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -323,7 +326,7 @@ class AIOSauceNao(SauceNao):
         return await self._search(params)
 
     async def _search(self, params, files=None):
-        session = self._session or aiohttp.ClientSession(loop=asyncio.get_event_loop(), timeout=ClientTimeout(3))
+        session = self._session or aiohttp.ClientSession(loop=asyncio.get_event_loop(), timeout=ClientTimeout(_TIMEOUT_))
 
         async with session.post(self.SAUCENAO_URL, params=params, data=files) as resp:
             status_code = resp.status
