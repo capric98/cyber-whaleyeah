@@ -16,6 +16,7 @@ async def _megaphone_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     msg = update.effective_message
     if msg.via_bot: return False
+    if not msg.text: return False
     if not context: pass
 
     commands = msg.text.strip().split(" ", maxsplit=1)

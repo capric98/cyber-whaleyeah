@@ -8,11 +8,11 @@ from telegram import Update
 from telegram.ext import Application, ContextTypes
 from telegram.ext import CommandHandler
 
-from .iwaku import iwaku_history_handler, iwaku_inline_handler, iwaku_locate_handler
+from .iwaku import iwaku_history_handler, iwaku_inline_handler, iwaku_locate_handler, iwaku_plugins_copy
 from .database import init_database
 
 
-plugins_list = []
+plugins_dict = {}
 
 async def hello_world(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_markdown(
@@ -20,8 +20,8 @@ async def hello_world(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 async def _helper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_markdown(
-        "Enabled Plugins:\n  - `" + "`\n  - ".join(plugins_list) + "`"
+    await update.message.reply_markdown_v2(
+        "Enabled Plugins:\n  \- `" + "`\n  \- `".join([k for k in plugins_dict]) + "`"
     )
 
 def serve_config(config: PathLike) -> None:
@@ -44,7 +44,7 @@ def serve_config(config: PathLike) -> None:
     app.add_handler(CommandHandler("start", hello_world))
     app.add_handler(CommandHandler("help", _helper))
 
-    global plugins_list
+    global plugins_dict
     plugins = config["plugins"]
     for (pname, pconf) in plugins.items():
         try:
@@ -57,13 +57,14 @@ def serve_config(config: PathLike) -> None:
         except Exception as e:
             logger.warning(f"Error: '{e}'")
         else:
-            plugins_list.append(pname)
+            plugins_dict[pname] = handler
 
     app.add_handler(iwaku_inline_handler())
     app.add_handler(iwaku_locate_handler())
     app.add_handler(iwaku_history_handler())
+    iwaku_plugins_copy(plugins_dict)
 
-    plugins_list = ["iwaku"] + plugins_list
+    plugins_dict["iwaku"] = None
 
 
     logger.info(f"Listening {config["listen"]}")

@@ -18,6 +18,7 @@ SEARCH_PAGE_SIZE = 10
 
 
 logger = logging.getLogger(__name__)
+plugins_from_server = {}
 
 
 def iwaku_history_handler() -> MessageHandler:
@@ -28,6 +29,9 @@ def iwaku_inline_handler() -> InlineQueryHandler:
     return InlineQueryHandler(callback=_iwaku_inline_callback)
 def iwaku_locate_handler() -> MessageHandler:
     return MessageHandler(filters=filters.COMMAND, callback=_iwaku_locate_callback)
+def iwaku_plugins_copy(p: dict) -> None:
+    global plugins_from_server
+    plugins_from_server = p
 
 
 def trim_tokens(tokens: list[str]) -> list[str]:
@@ -61,6 +65,9 @@ async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_
     if msg:
         if msg.text:
             text = msg.text
+            if text.startswith("/"):
+                if await _megaphone_callback(update, context):
+                    return
         else:
             text = msg.caption
             if msg.audio: prefix = ["[音乐]", " "]
@@ -72,9 +79,11 @@ async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_
             if msg.voice: prefix = ["[语音]", " "]
 
     if not text: return
-    if text.startswith("/"):
-        if await _megaphone_callback(update, context):
+    for k, v in plugins_from_server.items():
+        if text.startswith(f"/{k}") and v:
+            await v.callback(update, context)
             return
+
 
     seg = await asyncio.to_thread(jieba.cut_for_search, text)
     seg = prefix + [s for s in seg]
