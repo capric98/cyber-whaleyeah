@@ -60,8 +60,6 @@ async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_
     if msg.via_bot: return
     if msg.forward_origin: return
 
-    logger.debug(update)
-
     if msg:
         if msg.text:
             text = msg.text
@@ -91,7 +89,6 @@ async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_
     text = "".join(prefix) + text
 
     jmsg = update.to_json()
-    logger.debug(jmsg)
     logger.debug(text)
     # logger.info(sys.getsizeof(jmsg)) ~1KB
 
@@ -150,7 +147,6 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
         try:
             # update.chat_member
             xx = await update.get_bot().get_chat_administrators(chat_id=mob.GROUP_ID)
-            logger.debug(xx)
             if xx is None:
                 return
             xx = [it.user.id for it in xx]
@@ -162,7 +158,7 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 
         filter = {"$and": [{"tokens": v} for v in query_tokens]}
-        logger.debug(filter)
+        # logger.debug(filter)
 
 
         query_start_time = time.time()
@@ -195,7 +191,7 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
             doc_update = update.de_json(json.loads(doc["json"]), update.get_bot())
             message    = doc_update.effective_message
             eff_text   = message.text if message.text else message.caption
-            logger.debug(doc_update)
+            # logger.debug(doc_update)
             results.append(
                 InlineQueryResultArticle(
                     id=message['id'],

@@ -65,6 +65,31 @@ def serve_config(config: PathLike) -> None:
     iwaku_plugins_copy(plugins_dict)
 
     plugins_dict["iwaku"] = None
+    
+    
+    for (jname, jconf) in config["jobs"].items():
+        try:
+            logger.info(f"Dynamically load job => {jname}...")
+            
+            kwargs = {}
+            for (k, v) in jconf.items():
+                if k=="type" or k=="settings": continue
+                kwargs[k] = v
+                
+            logger.debug(f"kwargs: {kwargs}")
+
+            
+            plugin  = import_module(f"{__package__}.jobs.{jname}")
+            handler = getattr(plugin, "get_handler")(jconf["settings"])
+
+            app.job_queue.__getattribute__(f"run_{jconf["type"]}")(
+                callback=handler,
+                **kwargs,
+            )
+        except Exception as e:
+            logger.warning(f"Error: '{e}'")
+
+    # job_task = asyncio.create_task(app.job_queue.start())
 
 
     logger.info(f"Listening {config["listen"]}")
