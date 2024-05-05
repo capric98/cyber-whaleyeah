@@ -19,7 +19,7 @@ SEARCH_PAGE_SIZE = 10
 
 logger = logging.getLogger(__name__)
 plugins_from_server = {}
-
+_iwaku_uid_whitelist = {}
 
 def iwaku_history_handler() -> MessageHandler:
     asyncio.get_event_loop().run_until_complete(mob.history.create_index("tokens"))
@@ -126,6 +126,7 @@ async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_
 async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # {"$and": [{"chat": msg.chat_id, "from": msg.from_user.id}, {"tokens": a}, {"tokens": b}, ...]}
     if not context: pass
+    query_start_time = time.time()
 
     query = update.inline_query.query
     if not query: return
@@ -144,24 +145,31 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
 
     if query_tokens:
         # check priviledge
-        try:
-            # update.chat_member
-            xx = await update.get_bot().get_chat_administrators(chat_id=mob.GROUP_ID)
-            if xx is None:
+        global _iwaku_uid_whitelist
+        if update.inline_query.from_user.id not in _iwaku_uid_whitelist:
+            try:
+                # update.chat_member
+                xx = await update.get_bot().get_chat_administrators(chat_id=mob.GROUP_ID)
+                if xx is None:
+                    _iwaku_uid_whitelist[update.inline_query.from_user.id] = False
+                    return
+                xx = [it.user.id for it in xx]
+                if update.inline_query.from_user.id not in xx:
+                    _iwaku_uid_whitelist[update.inline_query.from_user.id] = False
+                    return
+                _iwaku_uid_whitelist[update.inline_query.from_user.id] = True
+            except Exception as e:
+                logger.warning(f"failed to check priviledge: {e}")
+                _iwaku_uid_whitelist[update.inline_query.from_user.id] = False
                 return
-            xx = [it.user.id for it in xx]
-            if update.inline_query.from_user.id not in xx:
-                return
-        except Exception as e:
-            logger.warning(f"failed to check priviledge: {e}")
-            return
+        elif not _iwaku_uid_whitelist[update.inline_query.from_user.id]: return
 
 
         filter = {"$and": [{"tokens": v} for v in query_tokens]}
         # logger.debug(filter)
 
 
-        query_start_time = time.time()
+        
 
         cursor = mob.history.find(filter)
         cursor = cursor.sort("date", -1)
@@ -178,7 +186,7 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
         results = [
             InlineQueryResultArticle(
                 id='info',
-                title='Total:{}. Page {} of {}'.format(count, page, math.ceil(count / SEARCH_PAGE_SIZE)),
+                title='Page {} of {} (Find {} records in {:.0f}ms).'.format(page, math.ceil(count / SEARCH_PAGE_SIZE), count, query_elapsed*1000),
                 # title='Total:{}. Page {} of ?'.format(count, page),
                 input_message_content=InputTextMessageContent('/help')
             )
