@@ -43,10 +43,9 @@ if __name__=="__main__":
     bot = Application.builder().token(config["token"]).build().bot
 
 
-    confirm = (input("WARNING: This will DROP ALL the history in the database! [Y/N]")).strip().upper()
-    if confirm!="Y": exit(0)
-
-    asyncio.run(mob.history.drop())
+    confirm = (input("WARNING: Do you want to DROP ALL the history in the database! [Y/N]")).strip().upper()
+    if confirm=="Y":
+        asyncio.run(mob.history.drop())
 
     logger.info("Loading dump file...")
     with open(args.dump, "r", encoding="utf-8") as f:
