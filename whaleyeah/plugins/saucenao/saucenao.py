@@ -1,9 +1,10 @@
+import asyncio
 import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 
-from .saucenao_api import AIOSauceNao, BasicSauce
+from .saucenao_api import SauceNao, BasicSauce
 
 logger = logging.getLogger(__name__)
 sauce  = None
@@ -14,20 +15,22 @@ _MAX_REPLY_ = 3
 
 def get_handler(config: dict) -> CommandHandler:
     global sauce
-    sauce = AIOSauceNao(config["api_key"])
+    sauce = SauceNao(config["api_key"])
     
     return CommandHandler(
         command="saucenao",
         callback=saucenao_callback,
     )
 
-def _reply_saucenao_results(results: list[BasicSauce]) -> str:
-    resp = f"1. {results[0].author}: [{results[0].index_name}]({results[0].urls[0]})"
-    for k in range(1, min(len(results), _MAX_REPLY_)+1):
+def _reply_saucenao_results(results: list) -> str:
+    # results = [v for v in results if isinstance(v, BasicSauce)]
+    # logger.info(results)
+    resp = f"1. {results[0].author}: [{results[0].index_name}]("+(results[0].urls[0] if results[0].urls else "")+")"
+    for k in range(1, min(len(results), _MAX_REPLY_)):
         result = results[k]
-        resp  += f"\n{k}. {result.author}: [{result.index_name}]({result.urls[0]})"
+        resp  += f"\n{k+1}. {result.author}: [{result.index_name}]("+ (result.urls[0] if result.urls else "") +")"
     
-    for c in ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']: resp = resp.replace(c, f"\\{c}")
+    for c in ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']: resp = resp.replace(c, f"\{c}")
     return resp
 
 async def saucenao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -68,8 +71,8 @@ async def saucenao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         
         if pic:
             f = await pic.get_file()
-            resp = await sauce.from_url(f"{f.file_path}")
-            if resp.results_returned:
+            resp = await asyncio.to_thread(sauce.from_url, f"{f.file_path}")
+            if resp.results:
                 await target_msg.reply_markdown_v2(_reply_saucenao_results(resp.results), disable_web_page_preview=True)
             else:
                 await target_msg.reply_text("没有找到相似的图片哦😢")
