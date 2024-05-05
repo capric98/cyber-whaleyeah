@@ -1,0 +1,25 @@
+{
+    "log_level": "info",
+    "token": "114514:YYYKYY",
+    "listen": "0.0.0.0:8888",
+    "webhook": "https://bot.domain.io/path",
+    "secret": "optional",
+    "database": {
+        "uri": "mongodb://%2Ftmp%2Fmongodb.sock",
+        "db_name": "whaleyeah",
+        "IWAKU_GROUP_ID": -1001145141919810
+    },
+    "plugins": {
+        "saucenao": {"api_key": "abcdefg"}
+    },
+    "jobs": {
+        "bilivestalker": {
+            "type": "repeating",
+            "interval": 60,
+            "settings": {
+                "rooms": [12345, 678910],
+                "chat_id": [-1001145141919810]
+            }
+        }
+    }
+}
