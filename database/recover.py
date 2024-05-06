@@ -53,7 +53,7 @@ if __name__=="__main__":
     with open(args.dump, "r", encoding="utf-8") as f:
         chat_id  = next(ijson.items(f, "id"))
 
-    f = open("result.json", "r", encoding="utf-8")
+    f = open(args.dump, "r", encoding="utf-8")
     messages = ijson.items(f, "messages.item")
     
     count = 0
