@@ -2,8 +2,10 @@
 # coding: utf-8
 import argparse
 import asyncio
+import ijson
 import json
 import logging
+import time
 
 import jieba
 
@@ -47,25 +49,23 @@ if __name__=="__main__":
     if confirm=="Y":
         asyncio.run(mob.history.drop())
 
-    logger.info("Loading dump file...")
-    with open(args.dump, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    logger.info("Loaded!")
 
-    chat_id  = data["id"]
-    messages = data["messages"]
-    total    = len(messages)
-    count    = 0
-    lastp    = 0
-    currp    = 0
+    with open(args.dump, "r", encoding="utf-8") as f:
+        chat_id  = next(ijson.items(f, "id"))
+
+    f = open("result.json", "r", encoding="utf-8")
+    messages = ijson.items(f, "messages.item")
+    
+    count = 0
+    lastt = 0
 
     for msg in messages:
 
         count += 1
-        currp = count / total * 100
-        if currp-lastp>1:
-            logger.info(f"{currp:5.2f}%...")
-            lastp = currp
+        currt = time.time()
+        if currt-lastt>1:
+            logger.info(f"parsed {count:8d} records...")
+            lastt = currt
 
         if "forwarded_from" in msg: continue
         try:
@@ -110,3 +110,4 @@ if __name__=="__main__":
 
 
     # asyncio.run(mob.database.)
+    f.close()
