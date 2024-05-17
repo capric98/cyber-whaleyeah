@@ -114,6 +114,7 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     completion_id = ""
     message       = None
+    reply_target  = msg
 
 
     if msg.reply_to_message:
@@ -127,6 +128,7 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         match = re.search(r"(?<=\[\[)chatcmpl-.*?(?=\]\])", rmsg.text)
         if match: completion_id = match.group(0)
+        reply_target = rmsg
 
     if msg.caption:
         pic = msg.photo
@@ -172,7 +174,7 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         await msg.reply_chat_action("typing")
         resp = await oai.request(message, completion_id)
-        await msg.reply_markdown_v2(telegramify_markdown.convert(resp).replace("\n\n", "\n"))
+        await reply_target.reply_markdown_v2(telegramify_markdown.convert(resp).replace("\n\n", "\n"))
 
 
     logger.debug(update)
