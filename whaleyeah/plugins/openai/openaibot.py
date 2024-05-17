@@ -1,15 +1,15 @@
 import logging
+import re
 
-from telegram import Update, Message
+from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
-from telegram.constants import ParseMode
 
 from openai import AsyncOpenAI
 import telegramify_markdown
 
 logger = logging.getLogger(__name__)
 
-__COMMAND__ = "chat"
+__COMMAND__ = "openai"
 
 
 class OpenAIBot:
@@ -31,15 +31,6 @@ class OpenAIBot:
     def whitelist_chat_ids(self) -> list:
         return self._wlchatids
 
-    def prepare_msgs(self, msg: Message, id: str="") -> list:
-        messages = self._memory[id] if id in self._memory else []
-
-        tg_msg = msg
-        msg    = {"role": "user"}
-
-        messages.append(msg)
-        return messages
-
     async def request(self, message: dict, id: str="") -> str:
         client = AsyncOpenAI(api_key=self._API_KEY)
 
@@ -57,6 +48,24 @@ class OpenAIBot:
             if chunk.choices[0].delta.content:
                 resp += chunk.choices[0].delta.content
 
+        cmpl_id = chunk.id
+        if not cmpl_id.startswith("chatcmpl-"):
+            logger.warning(f"chat id: {cmpl_id}")
+            cmpl_id = "chatcmpl-"+cmpl_id
+
+        messages.append({
+            "role": "assistant",
+            "content": resp,
+        })
+        if cmpl_id in self._memory:
+            self._memory[cmpl_id] = messages
+        else:
+            victim = self._mem_queue.pop(1)
+            if victim: self._memory.__delitem__(victim)
+            self._mem_queue.append(cmpl_id)
+            self._memory[cmpl_id] = messages
+
+        resp += f"\n`[[{cmpl_id}]]`"
         return resp
 
 oai = None
@@ -71,6 +80,8 @@ def get_handler(config: dict) -> CommandHandler:
     )
 
 async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # logger.debug(f"openai!! {update}")
+
     msg  = update.effective_message
     if not msg: return
 
@@ -102,14 +113,51 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
     completion_id = ""
+    message       = None
 
 
     if msg.reply_to_message:
-        msg.reply_text("开发中！")
-        return
+        rmsg = msg.reply_to_message
+        try:
+            if not rmsg.from_user.is_bot:
+                await msg.reply_text("被回复内容似乎不是bot发送的OpenAI消息🤨！")
+                return
+        except:
+            return
+
+        match = re.search(r"(?<=\[\[)chatcmpl-.*?(?=\]\])", rmsg.text)
+        if match: completion_id = match.group(0)
+
     if msg.caption:
-        msg.reply_text("开发中！")
-        return
+        pic = msg.photo
+        doc = msg.document
+        if pic:
+            list(pic).sort(key=lambda v: v.width, reverse=True)
+            pic = pic[0]
+        elif doc:
+            pic = doc
+        else:
+            await msg.reply_text(text="尚不支持图片以外的文件哦😭")
+            return
+
+        f = await pic.get_file()
+        effective_text = msg.caption.removeprefix(f"/{__COMMAND__}").strip()
+
+        message = {
+            "role": "user",
+            "name": str(sender.id),
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"{f.file_path}"},
+                },
+                {
+                    "type": "text",
+                    "text": f"{effective_text}",
+                },
+            ],
+        }
+
     if msg.text:
         effective_text = msg.text.removeprefix(f"/{__COMMAND__}").strip()
         message = {
@@ -118,8 +166,11 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             "content": effective_text,
         }
 
+
+    if message:
         logger.debug(message)
 
+        await msg.reply_chat_action("typing")
         resp = await oai.request(message, completion_id)
         await msg.reply_markdown_v2(telegramify_markdown.convert(resp).replace("\n\n", "\n"))
 
