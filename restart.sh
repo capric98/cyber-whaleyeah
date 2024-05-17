@@ -6,4 +6,4 @@
 # MYUID="$(id -u)" MYGID="$(id -g)" docker-compose up -d
 MYUID="$(id -u)" MYGID="$(id -g)" docker-compose restart whaleyeah
 
-docker-compose logs -f whaleyeah
+docker-compose logs --tail 100 -f whaleyeah 
