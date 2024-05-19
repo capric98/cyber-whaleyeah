@@ -3,8 +3,9 @@ import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
+from telegramify_markdown import convert as markdown
 
-from .saucenao_api import SauceNao, BasicSauce
+from .saucenao_api import SauceNao
 
 logger = logging.getLogger(__name__)
 sauce  = None
@@ -16,7 +17,7 @@ _MAX_REPLY_ = 3
 def get_handler(config: dict) -> CommandHandler:
     global sauce
     sauce = SauceNao(config["api_key"])
-    
+
     return CommandHandler(
         command="saucenao",
         callback=saucenao_callback,
@@ -29,14 +30,13 @@ def _reply_saucenao_results(results: list) -> str:
     for k in range(1, min(len(results), _MAX_REPLY_)):
         result = results[k]
         resp  += f"\n{k+1}. {result.author}: [{result.index_name}]("+ (result.urls[0] if result.urls else "") +")"
-    
-    for c in ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']: resp = resp.replace(c, f"\{c}")
-    return resp
+
+    return markdown(resp).replace("\n\n", "\n")
 
 async def saucenao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.effective_message
     target_msg = msg;
-    
+
     try:
         if msg and msg.reply_to_message:
             pic = msg.reply_to_message.photo
@@ -69,7 +69,7 @@ async def saucenao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 text="仅支持对图片消息回复！",
             )
             return
-        
+
         if pic:
             f = await pic.get_file()
             resp = await asyncio.to_thread(sauce.from_url, f"{f.file_path}")
@@ -82,6 +82,6 @@ async def saucenao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     except Exception as e:
         logger.warning(e)
         await msg.reply_text(text="服务器返回错误，请稍后再试",)
-    
+
 
     logger.debug(update)
