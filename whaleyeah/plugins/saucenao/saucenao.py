@@ -55,7 +55,8 @@ async def saucenao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             pic = msg.photo
             doc = msg.document
             if pic:
-                list(pic).sort(key=lambda v: v.width, reverse=True)
+                pic = list(pic)
+                pic.sort(key=lambda v: v.width, reverse=True)
                 pic = pic[0]
             elif doc:
                 pic = doc
