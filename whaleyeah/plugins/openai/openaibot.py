@@ -31,6 +31,15 @@ class OpenAIBot:
     def whitelist_chat_ids(self) -> list:
         return self._wlchatids
 
+    def remember(self, messages: list, id: str) -> None:
+        if id in self._memory:
+            self._memory[id] = messages
+        else:
+            victim = self._mem_queue.pop(1)
+            if victim: self._memory.__delitem__(victim)
+            self._mem_queue.append(id)
+            self._memory[id] = messages
+
     async def request(self, message: dict, id: str="") -> str:
         client = AsyncOpenAI(api_key=self._API_KEY)
 
@@ -48,25 +57,13 @@ class OpenAIBot:
             if chunk.choices[0].delta.content:
                 resp += chunk.choices[0].delta.content
 
-        cmpl_id = chunk.id
-        if not cmpl_id.startswith("chatcmpl-"):
-            logger.warning(f"chat id: {cmpl_id}")
-            cmpl_id = "chatcmpl-"+cmpl_id
-
         messages.append({
             "role": "assistant",
             "content": resp,
         })
-        if cmpl_id in self._memory:
-            self._memory[cmpl_id] = messages
-        else:
-            victim = self._mem_queue.pop(1)
-            if victim: self._memory.__delitem__(victim)
-            self._mem_queue.append(cmpl_id)
-            self._memory[cmpl_id] = messages
 
-        resp += f"\n`[[{cmpl_id}]]`"
-        return resp
+        return resp, messages
+
 
 oai = None
 
@@ -112,9 +109,9 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if not flag: return
 
 
-    completion_id = ""
-    message       = None
-    reply_target  = msg
+    memory_id    = ""
+    message      = None
+    reply_target = msg
 
 
     if msg.reply_to_message:
@@ -126,8 +123,8 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         except:
             return
 
-        match = re.search(r"(?<=\[\[)chatcmpl-.*?(?=\]\])", rmsg.text)
-        if match: completion_id = match.group(0)
+        memory_id = f"{rmsg.chat_id}<-{rmsg.id}"
+
         reply_target = rmsg
 
     if msg.caption:
@@ -181,12 +178,14 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await msg.reply_chat_action("typing")
 
         try:
-            resp = await oai.request(message, completion_id)
+            resp, messages = await oai.request(message, memory_id)
         except Exception as e:
             logger.error(e)
             await reply_target.reply_text(f"{e}")
         else:
-            await reply_target.reply_markdown_v2(telegramify_markdown.convert(resp).replace("\n\n", "\n"))
+            msg = await reply_target.reply_markdown_v2(telegramify_markdown.convert(resp).replace("\n\n", "\n"))
+            if msg:
+                oai.remember(messages, f"{msg.chat_id}<-{msg.id}")
 
 
     logger.debug(update)
