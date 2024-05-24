@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 def megaphone_handler() -> MessageHandler:
     return MessageHandler(filters=filters.COMMAND, callback=_megaphone_callback)
 
+
 async def _megaphone_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    logger.debug("_megaphone_callback!")
 
     msg = update.effective_message
     if msg.via_bot: return False
