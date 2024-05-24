@@ -1,5 +1,5 @@
 import logging
-import re
+import mimetypes
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
@@ -115,17 +115,16 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
     if msg.reply_to_message:
-        rmsg = msg.reply_to_message
+        reply_target = msg.reply_to_message
+        memory_id    = f"{reply_target.chat_id}<-{reply_target.id}"
+
         try:
-            if not rmsg.from_user.is_bot:
-                await msg.reply_text("被回复内容似乎不是bot发送的OpenAI消息🤨！")
+            if not reply_target.from_user.is_bot:
+                await reply_target.reply_text("这似乎不是bot发送的OpenAI消息🤨！")
                 return
         except:
             return
 
-        memory_id = f"{rmsg.chat_id}<-{rmsg.id}"
-
-        reply_target = rmsg
 
     if msg.caption:
         pic = msg.photo
@@ -136,17 +135,20 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             pic = pic[0]
         elif doc:
             pic = doc
-            # TODO: handle other document type
+
+            if not mimetypes.guess_type(pic.file_name)[0].startswith("image"):
+                # TODO: handle other document type
+                await reply_target.reply_text(text="尚不支持图片以外的文件哦😭")
         else:
-            await msg.reply_text(text="尚不支持图片以外的文件哦😭")
+            await reply_target.reply_text(text="尚不支持图片以外的文件哦😭")
+            return
+
+        effective_text = msg.caption.removeprefix(f"/{__COMMAND__}").removeprefix(msg.get_bot().name).strip()
+        if not effective_text:
+            await reply_target.reply_text("食用方式：/openai 你好")
             return
 
         f = await pic.get_file()
-        effective_text = msg.caption.removeprefix(f"/{__COMMAND__}").removeprefix(msg.get_bot().name).strip()
-
-        if not effective_text:
-            await msg.reply_text("食用方式：/openai 你好")
-            return
 
         message = {
             "role": "user",
@@ -163,8 +165,13 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             ],
         }
 
+
     if msg.text:
         effective_text = msg.text.removeprefix(f"/{__COMMAND__}").removeprefix(msg.get_bot().name).strip()
+        if not effective_text:
+            await reply_target.reply_text("食用方式：/openai 你好")
+            return
+
         message = {
             "role": "user",
             "name": str(sender.id),
@@ -175,7 +182,7 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if message:
         logger.debug(message)
 
-        await msg.reply_chat_action("typing")
+        await reply_target.reply_chat_action("typing")
 
         try:
             resp, messages = await oai.request(message, memory_id)
