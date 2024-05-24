@@ -167,7 +167,7 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         }
 
     if msg.text:
-        effective_text = msg.text.removeprefix(f"/{__COMMAND__}").strip()
+        effective_text = msg.text.removeprefix(f"/{__COMMAND__}").removeprefix(msg.get_bot().name).strip()
         message = {
             "role": "user",
             "name": str(sender.id),
