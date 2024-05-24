@@ -10,7 +10,13 @@
         "IWAKU_GROUP_ID": -1001145141919810
     },
     "plugins": {
-        "saucenao": {"api_key": "abcdefg"}
+        "saucenao": {"api_key": "abcdefg"},
+        "openai": {
+            "api_key": "sk-servicename-Abcdefg",
+            "model": "gpt-4o",
+            "memory_size": 64,
+            "whitelist_chat": [-1001145141919810]
+        }
     },
     "jobs": {
         "bilivestalker": {
