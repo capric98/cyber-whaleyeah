@@ -139,12 +139,17 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             pic = pic[0]
         elif doc:
             pic = doc
+            # TODO: handle other document type
         else:
             await msg.reply_text(text="尚不支持图片以外的文件哦😭")
             return
 
         f = await pic.get_file()
-        effective_text = msg.caption.removeprefix(f"/{__COMMAND__}").strip()
+        effective_text = msg.caption.removeprefix(f"/{__COMMAND__}").removeprefix(msg.get_bot().name).strip()
+
+        if not effective_text:
+            await msg.reply_text("食用方式：/openai 你好")
+            return
 
         message = {
             "role": "user",
@@ -174,8 +179,14 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.debug(message)
 
         await msg.reply_chat_action("typing")
-        resp = await oai.request(message, completion_id)
-        await reply_target.reply_markdown_v2(telegramify_markdown.convert(resp).replace("\n\n", "\n"))
+
+        try:
+            resp = await oai.request(message, completion_id)
+        except Exception as e:
+            logger.error(e)
+            await reply_target.reply_text(f"{e}")
+        else:
+            await reply_target.reply_markdown_v2(telegramify_markdown.convert(resp).replace("\n\n", "\n"))
 
 
     logger.debug(update)
