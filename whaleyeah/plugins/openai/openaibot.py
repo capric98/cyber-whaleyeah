@@ -190,7 +190,7 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             logger.error(e)
             await reply_target.reply_text(f"{e}")
         else:
-            msg = await reply_target.reply_markdown_v2(telegramify_markdown.markdownify(resp))
+            msg = await reply_target.reply_markdown_v2(telegramify_markdown.convert(resp))
             if msg:
                 oai.remember(messages, f"{msg.chat_id}<-{msg.id}")
 

@@ -3,7 +3,7 @@ import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
-from telegramify_markdown import markdownify as markdown
+from telegramify_markdown import convert as markdown
 
 from .saucenao_api import SauceNao
 
