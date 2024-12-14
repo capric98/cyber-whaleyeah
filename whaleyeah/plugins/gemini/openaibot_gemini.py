@@ -151,7 +151,7 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         effective_text = msg.caption.removeprefix(f"/{__COMMAND__}").removeprefix(msg.get_bot().name).strip()
         if not effective_text:
-            await reply_target.reply_text("食用方式：/openai 你好")
+            await reply_target.reply_text(f"食用方式：/${__COMMAND__} 你好")
             return
 
         f = await pic.get_file()
