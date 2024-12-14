@@ -21,6 +21,10 @@ class OpenAIBot:
         self._wlchatids = config["whitelist_chat"]
         self._whitelist = {}
 
+        if "command" in config:
+            global __COMMAND__
+            __COMMAND__ = config["command"]
+
     @property
     def model(self) -> str:
         return self._MODEL
