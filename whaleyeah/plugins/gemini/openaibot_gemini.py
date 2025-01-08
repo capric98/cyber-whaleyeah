@@ -5,7 +5,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 
 from openai import AsyncOpenAI
-import telegramify_markdown
+from telegramify_markdown import markdownify
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +196,7 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             logger.error(e)
             await reply_target.reply_text(f"{e}")
         else:
-            msg = await reply_target.reply_markdown_v2(telegramify_markdown.convert(resp))
+            msg = await reply_target.reply_markdown_v2(markdownify(resp))
             if msg:
                 oai.remember(messages, f"{msg.chat_id}<-{msg.id}")
 

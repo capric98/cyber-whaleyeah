@@ -3,7 +3,7 @@ import logging
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
-from telegramify_markdown import convert as markdown
+from telegramify_markdown import markdownify
 
 from .saucenao_api import SauceNao
 
@@ -31,7 +31,7 @@ def _reply_saucenao_results(results: list) -> str:
         result = results[k]
         resp  += f"\n{k+1}. {result.author}: [{result.index_name}]("+ (result.urls[0] if result.urls else "") +")"
 
-    return markdown(resp)
+    return markdownify(resp)
 
 async def saucenao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.effective_message
