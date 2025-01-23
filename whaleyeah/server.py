@@ -48,6 +48,10 @@ def serve_config(config: PathLike) -> None:
     plugins = config["plugins"]
     for (pname, pconf) in plugins.items():
         try:
+            if "__module_name__" in pconf:
+                if "command" not in pconf: pconf["command"] = pname
+                pname = pconf["__module_name__"]
+
             logger.info(f"Dynamically load plugin => {pname}...")
             plugin  = import_module(f"{__package__}.plugins.{pname}")
             handler = getattr(plugin, "get_handler")(pconf)
@@ -65,20 +69,20 @@ def serve_config(config: PathLike) -> None:
     iwaku_plugins_copy(plugins_dict)
 
     plugins_dict["iwaku"] = None
-    
-    
+
+
     for (jname, jconf) in config["jobs"].items():
         try:
             logger.info(f"Dynamically load job => {jname}...")
-            
+
             kwargs = {}
             for (k, v) in jconf.items():
                 if k=="type" or k=="settings": continue
                 kwargs[k] = v
-                
+
             logger.debug(f"kwargs: {kwargs}")
 
-            
+
             plugin  = import_module(f"{__package__}.jobs.{jname}")
             handler = getattr(plugin, "get_handler")(jconf["settings"])
 
