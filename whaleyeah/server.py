@@ -49,11 +49,13 @@ def serve_config(config: PathLike) -> None:
 
     global plugins_dict
     plugins = config["plugins"]
-    for (pname, pconf) in plugins.items():
+    for (name, pconf) in plugins.items():
         try:
             if "__module_name__" in pconf:
-                if "command" not in pconf: pconf["command"] = pname
+                if "command" not in pconf: pconf["command"] = name
                 pname = pconf["__module_name__"]
+            else:
+                pname = name
 
             logger.info(f"Dynamically load plugin => {pname}...")
             plugin  = import_module(f"{__package__}.plugins.{pname}")
@@ -64,7 +66,7 @@ def serve_config(config: PathLike) -> None:
         except Exception as e:
             logger.warning(f"Error: '{e}'")
         else:
-            plugins_dict[pname] = handler
+            plugins_dict[name] = handler
 
     app.add_handler(iwaku_inline_handler())
     app.add_handler(iwaku_locate_handler())
