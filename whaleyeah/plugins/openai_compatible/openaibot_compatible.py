@@ -94,6 +94,7 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         command = msg.text.split(" ", maxsplit=1)[0]
 
     command = command.removeprefix("/")
+    command = command.split("@", maxsplit=1)[0]
 
     global oai_comp_dict
     oai = oai_comp_dict[command]
