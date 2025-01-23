@@ -7,6 +7,7 @@ from importlib import import_module
 from telegram import Update
 from telegram.ext import Application, ContextTypes
 from telegram.ext import CommandHandler
+from telegramify_markdown import markdownify
 
 from .iwaku import iwaku_history_handler, iwaku_inline_handler, iwaku_locate_handler, iwaku_plugins_copy
 from .database import init_database
@@ -21,7 +22,9 @@ async def hello_world(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 async def _helper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_markdown_v2(
-        "Enabled Plugins:\n  \- `" + "`\n  \- `".join([k for k in plugins_dict]) + "`"
+        markdownify(
+            "Enabled Plugins:\n  - `" + "`\n  - `".join([k for k in plugins_dict]) + "`"
+        )
     )
 
 def serve_config(config: PathLike) -> None:
