@@ -208,7 +208,9 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             resp, messages = await oai.request(message, memory_id)
         except Exception as e:
             logger.error(e)
-            await reply_target.reply_text(f"{e}")
+            error_str = f"{e}"
+            error_str.replace(update.get_bot().token, "***************")
+            await reply_target.reply_text(error_str)
         else:
             msg = await reply_target.reply_markdown_v2(markdownify(resp))
             if msg:
