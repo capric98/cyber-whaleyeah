@@ -1,6 +1,9 @@
 import logging
 import mimetypes
 
+import aiohttp
+import base64
+
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 
@@ -157,14 +160,22 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             return
 
         f = await pic.get_file()
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f.file_id) as resp:
+                image_type   = resp.headers.get("content-type")
+                image_base64 = base64.standard_b64encode(await resp.read()).decode("utf-8")
 
         message = {
             "role": "user",
             "name": str(sender.id),
             "content": [
                 {
-                    "type": "image_url",
-                    "image_url": {"url": f"{f.file_path}"},
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": image_type,
+                        "data": image_base64,
+                    },
                 },
                 {
                     "type": "text",
@@ -182,7 +193,6 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         message = {
             "role": "user",
-            "name": str(sender.id),
             "content": effective_text,
         }
 
