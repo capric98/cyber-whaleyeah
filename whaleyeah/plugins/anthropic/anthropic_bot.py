@@ -51,7 +51,6 @@ class AnthropicBot:
             messages=messages,
             model=self._MODEL,
             max_tokens=self._max_tokens,
-            stream=True,
         )
 
         resp = message.content
