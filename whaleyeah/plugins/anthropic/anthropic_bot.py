@@ -47,15 +47,17 @@ class AnthropicBot:
         messages = self._memory[id] if id in self._memory else []
         messages.append(message)
 
-        stream = await client.messages.with_streaming_response.create(
+        stream = await client.messages.create(
             messages=messages,
             model=self._MODEL,
             max_tokens=self._max_tokens,
+            stream=True,
         )
 
         resp = ""
-        async for line in stream.iter_lines():
-            resp += line
+        async for chunk in stream:
+            if chunk.type == "content_block_delta":
+                resp += chunk.delta.text
 
         messages.append({
             "role": "assistant",
