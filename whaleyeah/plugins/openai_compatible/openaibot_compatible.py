@@ -183,7 +183,7 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if msg.text:
         effective_text = msg.text.removeprefix(f"/{command}").removeprefix(msg.get_bot().name).strip()
         if not effective_text:
-            await reply_target.reply_text("食用方式：/openai 你好")
+            await reply_target.reply_text(f"食用方式：/{command} 你好")
             return
 
         message = {
