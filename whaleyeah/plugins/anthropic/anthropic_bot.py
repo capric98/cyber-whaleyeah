@@ -19,7 +19,6 @@ class AnthropicBot:
         self._memory     = {}
         self._wlchatids  = config["whitelist_chat"]
         self._whitelist  = {}
-        self._endpoint   = config["endpoint"]
         self._max_tokens = 2048 if "max_tokens" not in config else config["max_tokens"]
         self._command    = config["command"]
 
@@ -43,10 +42,7 @@ class AnthropicBot:
             self._memory[id] = messages
 
     async def request(self, message: dict, id: str="") -> str:
-        client = AsyncOpenAI(
-            api_key=self._API_KEY,
-            # base_url=self._endpoint
-        )
+        client = AsyncOpenAI(api_key=self._API_KEY)
 
         messages = self._memory[id] if id in self._memory else []
         messages.append(message)
