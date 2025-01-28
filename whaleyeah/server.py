@@ -43,7 +43,14 @@ def serve_config(config: PathLike) -> None:
 
     init_database(config["database"])
 
-    app = Application.builder().token(config["token"]).build()
+    app = (
+        Application.
+        builder().
+        token(config["token"]).
+        concurrent_updates(True).
+        build()
+    )
+
     app.add_handler(CommandHandler("start", hello_world))
     app.add_handler(CommandHandler("help", _helper))
 
