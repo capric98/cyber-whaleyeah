@@ -50,15 +50,26 @@ class AnthropicBot:
         messages = self._memory[id] if id in self._memory else []
         messages.append(message)
 
-        stream = await client.messages.create(
+        # stream = await client.messages.create(
+        #     messages=messages,
+        #     model=self._MODEL,
+        #     max_tokens=self._max_tokens,
+        # )
+
+        # resp = ""
+        # for chunk in stream.content:
+        #     resp += chunk.text
+
+        resp = ""
+
+        async with client.messages.stream(
             messages=messages,
             model=self._MODEL,
             max_tokens=self._max_tokens,
-        )
-
-        resp = ""
-        for chunk in stream.content:
-            resp += chunk.text
+        ) as stream:
+            # Process the stream
+            async for message in stream.text_stream:
+                resp += message
 
         messages.append({
             "role": "assistant",

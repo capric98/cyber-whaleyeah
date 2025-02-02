@@ -54,7 +54,7 @@ class OpenAIBot:
         trial_count = 0
         think_flag  = False
 
-        while resp=="" and trial_count<3:
+        while not resp and trial_count<3:
             trial_count += 1
             stream = await client.chat.completions.create(
                 messages=messages,
