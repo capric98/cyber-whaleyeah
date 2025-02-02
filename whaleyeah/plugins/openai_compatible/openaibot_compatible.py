@@ -52,6 +52,7 @@ class OpenAIBot:
 
         resp = ""
         trial_count = 0
+        think_flag  = False
 
         while resp=="" and trial_count<3:
             trial_count += 1
@@ -62,13 +63,17 @@ class OpenAIBot:
             )
             async for chunk in stream:
                 if chunk.choices[0].delta.content:
-                    resp += chunk.choices[0].delta.content
+                    if chunk.choices[0].delta.content.startswith("<think>"): think_flag = True
+                    if think_flag:
+                        if "</think>" in chunk.choices[0].delta.content: think_flag = False
+                    else:
+                        resp += chunk.choices[0].delta.content
 
         if resp=="": resp = "API未返回错误信息，但回复为空。"
 
         messages.append({
             "role": "assistant",
-            "content": resp,
+            "content": resp.strip(),
         })
 
         return resp, messages
