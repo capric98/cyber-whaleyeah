@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 oai_comp_dict = dict()
 
-class OpenAIBot:
+class OpenAICompBot:
     def __init__(self, config: dict) -> None:
         self._API_KEY   = config["api_key"]
         self._MODEL     = config["model"]
@@ -54,8 +54,14 @@ class OpenAIBot:
         trial_count = 0
         think_flag  = False
 
+
         while not resp and trial_count<3:
+
             trial_count += 1
+
+            if trial_count>1:
+                logger.warning(f"/{self._command} get empty response, retry ({trial_count}/3)")
+
             stream = await client.chat.completions.create(
                 messages=messages,
                 model=self._MODEL,
@@ -68,6 +74,7 @@ class OpenAIBot:
                         if "</think>" in chunk.choices[0].delta.content: think_flag = False
                     else:
                         resp += chunk.choices[0].delta.content
+
 
         if not resp: resp = "API未返回错误信息，但回复为空。"
 
@@ -84,7 +91,7 @@ oai = None
 def get_handler(config: dict) -> CommandHandler:
     global oai_comp_dict
 
-    oai = OpenAIBot(config)
+    oai = OpenAICompBot(config)
     oai_comp_dict[oai._command] = oai
 
     return CommandHandler(
