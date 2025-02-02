@@ -50,16 +50,21 @@ class OpenAIBot:
         messages = self._memory[id] if id in self._memory else []
         messages.append(message)
 
-        stream = await client.chat.completions.create(
-            messages=messages,
-            model=self._MODEL,
-            stream=True,
-        )
-
         resp = ""
-        async for chunk in stream:
-            if chunk.choices[0].delta.content:
-                resp += chunk.choices[0].delta.content
+        trial_count = 0
+
+        while resp=="" and trial_count<3:
+            trial_count += 1
+            stream = await client.chat.completions.create(
+                messages=messages,
+                model=self._MODEL,
+                stream=True,
+            )
+            async for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    resp += chunk.choices[0].delta.content
+
+        if resp=="": resp = "API未返回错误信息，但回复为空。"
 
         messages.append({
             "role": "assistant",
