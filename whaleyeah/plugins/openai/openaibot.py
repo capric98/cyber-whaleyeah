@@ -50,15 +50,16 @@ class OpenAIBot:
         messages = self._memory[id] if id in self._memory else []
         messages.append(message)
 
-        async with client.chat.completions.create(
+        stream = await client.chat.completions.create(
             messages=messages,
             model=self._MODEL,
             stream=True,
-        ) as stream:
-            resp = ""
-            async for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    resp += chunk.choices[0].delta.content
+        )
+
+        resp = ""
+        async for chunk in stream:
+            if chunk.choices[0].delta.content:
+                resp += chunk.choices[0].delta.content
 
         messages.append({
             "role": "assistant",

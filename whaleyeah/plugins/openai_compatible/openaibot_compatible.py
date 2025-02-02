@@ -62,19 +62,18 @@ class OpenAICompBot:
             if trial_count>1:
                 logger.warning(f"/{self._command} get empty response, retry ({trial_count}/3)")
 
-            async with client.chat.completions.create(
+            stream = await client.chat.completions.create(
                 messages=messages,
                 model=self._MODEL,
                 stream=True,
-            ) as stream:
-                async for chunk in stream:
-                    if chunk.choices[0].delta.content:
-                        if (not resp) and (chunk.choices[0].delta.content.startswith("<think>")):
-                            think_flag = True
-                        if think_flag:
-                            if "</think>" in chunk.choices[0].delta.content: think_flag = False
-                        else:
-                            resp += chunk.choices[0].delta.content
+            )
+            async for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    if (not resp) and (chunk.choices[0].delta.content.startswith("<think>")): think_flag = True
+                    if think_flag:
+                        if "</think>" in chunk.choices[0].delta.content: think_flag = False
+                    else:
+                        resp += chunk.choices[0].delta.content
 
 
         if not resp: resp = "API未返回错误信息，但回复为空。"
