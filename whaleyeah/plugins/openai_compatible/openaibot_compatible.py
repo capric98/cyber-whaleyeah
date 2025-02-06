@@ -62,18 +62,21 @@ class OpenAICompBot:
             if trial_count>1:
                 logger.warning(f"/{self._command} get empty response, retry ({trial_count}/3)")
 
-            stream = await client.chat.completions.create(
-                messages=messages,
-                model=self._MODEL,
-                stream=True,
-            )
-            async for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    if (not resp) and (chunk.choices[0].delta.content.startswith("<think>")): think_flag = True
-                    if think_flag:
-                        if "</think>" in chunk.choices[0].delta.content: think_flag = False
-                    else:
-                        resp += chunk.choices[0].delta.content
+            try:
+                stream = await client.chat.completions.create(
+                    messages=messages,
+                    model=self._MODEL,
+                    stream=True,
+                )
+                async for chunk in stream:
+                    if chunk.choices[0].delta.content:
+                        if (not resp) and (chunk.choices[0].delta.content.startswith("<think>")): think_flag = True
+                        if think_flag:
+                            if "</think>" in chunk.choices[0].delta.content: think_flag = False
+                        else:
+                            resp += chunk.choices[0].delta.content
+            except Exception as e:
+                if resp: resp += f"\nError: {e}"
 
 
         if not resp: resp = "API未返回错误信息，但回复为空。"
@@ -98,6 +101,11 @@ def get_handler(config: dict) -> CommandHandler:
         command=oai._command,
         callback=openai_callback,
     )
+
+def remove_credentials(content: str, credentials: list[str]) -> str:
+    for credential in credentials:
+        content = content.replace(credential, "*"*len(credential))
+    return content
 
 async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # logger.debug(f"openai!! {update}")
@@ -217,11 +225,10 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         try:
             resp, messages = await oai.request(message, memory_id)
+            resp = remove_credentials(resp, update.get_bot().token.split(":"));
         except Exception as e:
             logger.error(e)
-            error_str = f"{e}"
-            for token_part in update.get_bot().token.split(":"):
-                error_str = error_str.replace(token_part, "*"*len(token_part))
+            error_str = remove_credentials(f"{e}", update.get_bot().token.split(":"))
             await reply_target.reply_text(error_str)
         else:
             msg = await reply_target.reply_markdown_v2(markdownify(resp))
