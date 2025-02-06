@@ -44,7 +44,7 @@ async def callback(ctx: CallbackContext):
 def _check_live(room_id: int) -> bool:
     resp = client.get(f"https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo?room_id={room_id}&protocol=0,1&format=0,1,2&codec=0,1,2&qn=0&platform=web&ptype=8&dolby=5&panorama=1").json()
     logger.debug(resp)
-    
+
     if resp["code"]!=0 or not("data" in resp and "live_status" in resp["data"]):
         logger.warning(f"failed to get live info for {room_id}: {resp["message"]}")
     else:
