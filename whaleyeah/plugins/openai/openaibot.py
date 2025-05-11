@@ -199,13 +199,12 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 error_str = error_str.replace(token_part, "*"*len(token_part))
             await reply_target.reply_text(error_str)
         else:
-            markdown_resp = markdownify(resp)
-            if len(markdown_resp) > 4000:
+            if len(markdown_resp := markdownify(resp)) > 4000:
                 pb_url = await xgg_pb_link(resp)
                 logger.info(f"too long response from openai, upload to pastebin: {pb_url}")
                 msg = await reply_target.reply_text(pb_url)
             else:
-                msg = await reply_target.reply_markdown_v2(markdownify(resp))
+                msg = await reply_target.reply_markdown_v2(markdown_resp)
 
             if msg:
                 oai.remember(messages, f"{msg.chat_id}<-{msg.id}")
