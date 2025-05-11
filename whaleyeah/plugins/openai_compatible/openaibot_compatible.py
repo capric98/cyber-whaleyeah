@@ -1,6 +1,7 @@
 import logging
 import mimetypes
 
+import asyncio
 import httpx
 
 from telegram import Update
@@ -131,6 +132,64 @@ async def xgg_pb_link(text: str) -> str:
     return f"https://shz.al/a/{path}"
 
 
+async def tg_typing_manager(
+    long_task_coroutine,
+    periodic_task_func,
+    interval_seconds: int,
+    long_task_name: str = "ManagedLongTask",
+    poller_name: str = "PeriodicPoller"
+):
+
+    long_task = asyncio.create_task(long_task_coroutine, name=long_task_name)
+
+    long_task_final_result = None
+    long_task_exception = None
+    poller_task_exception = None
+
+    async def _poller():
+        try:
+            while not long_task.done():
+                await asyncio.sleep(interval_seconds)
+
+                if not long_task.done():
+                    await periodic_task_func()
+                else:
+                    break
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            nonlocal poller_task_exception
+            poller_task_exception = e
+
+    poller_task = asyncio.create_task(_poller(), name=poller_name)
+
+    try:
+        long_task_final_result = await long_task
+    except asyncio.CancelledError:
+        long_task_exception = asyncio.CancelledError() # 记录下来
+    except Exception as e:
+        long_task_exception = e # 记录下来
+
+
+    if not poller_task.done():
+        try:
+            await poller_task
+        except asyncio.CancelledError:
+            pass
+
+    if poller_task.done() and not poller_task.cancelled() and poller_task.exception() and not poller_task_exception:
+        poller_task_exception = poller_task.exception()
+
+    if long_task_exception:
+        raise long_task_exception
+
+    if poller_task_exception:
+        raise poller_task_exception
+
+    return long_task_final_result
+
+
+
 async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # logger.debug(f"openai!! {update}")
 
@@ -247,8 +306,17 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         await reply_target.reply_chat_action("typing")
 
+        async def reply_typing_wrapper():
+            await reply_target.reply_chat_action("typing")
+
         try:
-            resp, messages = await oai.request(message, memory_id)
+            # resp, messages = await oai.request(message, memory_id)
+            resp, messages = await tg_typing_manager(
+                oai.request(message, memory_id),
+                reply_typing_wrapper,
+                interval_seconds = 5,
+            )
+
             resp = remove_credentials(resp, update.get_bot().token.split(":"));
         except Exception as e:
             logger.error(e)
