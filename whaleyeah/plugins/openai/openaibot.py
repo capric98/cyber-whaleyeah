@@ -200,13 +200,7 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 reply_typing_wrapper,
                 interval_seconds = 5,
             )
-        except Exception as e:
-            logger.error(e)
-            error_str = f"{e}"
-            for token_part in update.get_bot().token.split(":"):
-                error_str = error_str.replace(token_part, "*"*len(token_part))
-            await reply_target.reply_text(error_str)
-        else:
+
             if len(markdown_resp := markdownify(resp)) > 4000:
                 pb_url = await xgg_pb_link(resp)
                 logger.info(f"too long response from openai, upload to pastebin: {pb_url}")
@@ -216,6 +210,12 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             if msg:
                 oai.remember(messages, f"{msg.chat_id}<-{msg.id}")
+        except Exception as e:
+            logger.error(e)
+            error_str = f"{e}"
+            for token_part in update.get_bot().token.split(":"):
+                error_str = error_str.replace(token_part, "*"*len(token_part))
+            await reply_target.reply_text(error_str)
 
 
     logger.debug(update)

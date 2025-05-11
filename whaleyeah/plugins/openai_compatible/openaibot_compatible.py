@@ -318,11 +318,6 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
 
             resp = remove_credentials(resp, update.get_bot().token.split(":"));
-        except Exception as e:
-            logger.error(e)
-            error_str = remove_credentials(f"{e}", update.get_bot().token.split(":"))
-            await reply_target.reply_text(error_str)
-        else:
             if len(markdown_resp := markdownify(resp)) > 4000:
                 pb_url = await xgg_pb_link(resp)
                 logger.info(f"too long response from {command}, upload to pastebin: {pb_url}")
@@ -332,6 +327,11 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             if msg:
                 oai.remember(messages, f"{msg.chat_id}<-{msg.id}")
+        except Exception as e:
+            logger.error(e)
+            error_str = remove_credentials(f"{e}", update.get_bot().token.split(":"))
+            await reply_target.reply_text(error_str)
+
 
 
     logger.debug(update)
