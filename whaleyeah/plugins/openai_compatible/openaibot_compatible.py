@@ -114,17 +114,20 @@ def remove_credentials(content: str, credentials: list[str]) -> str:
 async def xgg_pb_link(text: str) -> str:
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(
-            url  = "https://shz.al/",
-            data = {
+            url   = "https://shz.al/",
+            files = {
                 "c": text,
                 "e": "3d",
-                "p": True,
-            }
+                "p": "true",
+            },
         )
 
-    resp = resp.json()
-    url  = resp["url"]
-    path = url.split("shz.al/")[-1]
+        resp.raise_for_status()
+
+        resp = resp.json()
+        url  = resp["url"]
+        path = url.split("shz.al/")[-1]
+
     return f"https://shz.al/a/{path}"
 
 
