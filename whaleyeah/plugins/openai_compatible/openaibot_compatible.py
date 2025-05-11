@@ -1,8 +1,11 @@
 import logging
 import mimetypes
 
+import httpx
+
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
+from telegram.request import HTTPXRequest
 
 from openai import AsyncOpenAI
 from telegramify_markdown import markdownify
@@ -106,6 +109,24 @@ def remove_credentials(content: str, credentials: list[str]) -> str:
     for credential in credentials:
         content = content.replace(credential, "*"*len(credential))
     return content
+
+
+async def xgg_pb_link(text: str) -> str:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            url  = "https://shz.al/",
+            data = {
+                "c": text,
+                "e": "3d",
+                "p": True,
+            }
+        )
+
+    resp = resp.json()
+    url  = resp["url"]
+    path = url.split("shz.al/")[-1]
+    return f"https://shz.al/a/{path}"
+
 
 async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # logger.debug(f"openai!! {update}")
@@ -231,7 +252,14 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             error_str = remove_credentials(f"{e}", update.get_bot().token.split(":"))
             await reply_target.reply_text(error_str)
         else:
-            msg = await reply_target.reply_markdown_v2(markdownify(resp))
+            markdown_resp = markdownify(resp)
+            if len(markdown_resp) > 4000:
+                pb_url = xgg_pb_link(resp)
+                logger.info(f"too long response from {command}, upload to pastebin: {pb_url}")
+                msg = await reply_target.reply(pb_url)
+            else:
+                msg = await reply_target.reply_markdown_v2(markdownify(resp))
+
             if msg:
                 oai.remember(messages, f"{msg.chat_id}<-{msg.id}")
 
