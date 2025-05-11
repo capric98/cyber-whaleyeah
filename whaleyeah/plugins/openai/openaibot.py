@@ -7,7 +7,7 @@ from telegram.ext import ContextTypes, CommandHandler
 from openai import AsyncOpenAI
 from telegramify_markdown import markdownify
 
-from whaleyeah.plugins.openai_compatible import xgg_pb_link
+from whaleyeah.plugins.openai_compatible import xgg_pb_link, tg_typing_manager
 
 logger = logging.getLogger(__name__)
 
@@ -188,10 +188,18 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if message:
         logger.debug(message)
 
-        await reply_target.reply_chat_action("typing")
+        async def reply_typing_wrapper():
+            await reply_target.reply_chat_action("typing")
+
+        await reply_typing_wrapper()
 
         try:
-            resp, messages = await oai.request(message, memory_id)
+            # resp, messages = await oai.request(message, memory_id)
+            resp, messages = await tg_typing_manager(
+                oai.request(message, memory_id),
+                reply_typing_wrapper,
+                interval_seconds = 5,
+            )
         except Exception as e:
             logger.error(e)
             error_str = f"{e}"

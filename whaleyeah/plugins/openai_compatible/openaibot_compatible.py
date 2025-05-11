@@ -304,10 +304,10 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if message:
         logger.debug(message)
 
-        await reply_target.reply_chat_action("typing")
-
         async def reply_typing_wrapper():
             await reply_target.reply_chat_action("typing")
+
+        await reply_typing_wrapper()
 
         try:
             # resp, messages = await oai.request(message, memory_id)
