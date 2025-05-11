@@ -1,1 +1,2 @@
 from .openaibot_compatible import get_handler
+from .openaibot_compatible import xgg_pb_link
