@@ -202,7 +202,7 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
 
             if len(markdown_resp := markdownify(resp)) > 4000:
-                pb_url = await xgg_pb_link(resp)
+                pb_url = await xgg_pb_link(resp, effective_text)
                 logger.info(f"too long response from openai, upload to pastebin: {pb_url}")
                 msg = await reply_target.reply_text(pb_url)
             else:

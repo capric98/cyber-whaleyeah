@@ -1,5 +1,6 @@
 import logging
 import mimetypes
+import uuid
 
 import asyncio
 import httpx
@@ -114,7 +115,10 @@ def remove_credentials(content: str, credentials: list[str]) -> str:
     return content
 
 
-async def xgg_pb_link(text: str) -> str:
+async def xgg_pb_link(text: str, title: str=str(uuid.uuid4())) -> str:
+    if len(title) > 40: title = title[:36] + "..."
+    text = f"# {title}\n" + text
+
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(
             url   = "https://shz.al/",
@@ -128,7 +132,7 @@ async def xgg_pb_link(text: str) -> str:
         resp.raise_for_status()
 
         resp = resp.json()
-        url  = resp["url"]
+        url  = resp["manageUrl"]
         path = url.split("shz.al/")[-1]
 
     return f"https://shz.al/a/{path}"
@@ -321,7 +325,7 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             resp = remove_credentials(resp, update.get_bot().token.split(":"));
             if len(markdown_resp := markdownify(resp)) > 4000:
-                pb_url = await xgg_pb_link(resp)
+                pb_url = await xgg_pb_link(resp, effective_text)
                 logger.info(f"too long response from {command}, upload to pastebin: {pb_url}")
                 msg = await reply_target.reply_text(pb_url)
             else:
