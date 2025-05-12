@@ -81,6 +81,8 @@ class OpenAICompBot:
                             resp += chunk.choices[0].delta.content
             except Exception as e:
                 if resp: resp += f"\nError: {e}"
+            finally:
+                logger.debug(f"{self._MODEL} response (trial #{trial_count}): \"{resp}\"")
 
 
         if not resp: resp = "API未返回错误信息，但回复为空。"
