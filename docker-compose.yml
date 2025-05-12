@@ -22,6 +22,11 @@ services:
     entrypoint: /entrypoint.sh
     depends_on:
       - whaleyeah-mongodb
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
 
   whaleyeah-mongodb:
     image: mongodb/mongodb-community-server:latest
@@ -32,7 +37,16 @@ services:
       - ./etc/mongod.conf:/etc/mongod.conf
       - ./database:/data/db
       - whaleyeah-tmp:/tmp
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
 
 volumes:
   whaleyeah-tmp:
   whaleyeah-sitepackages:
+
+networks:
+  whaleyeah-network:
+    driver: bridge
