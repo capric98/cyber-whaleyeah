@@ -41,7 +41,7 @@ class OpenAIBot:
         if id in self._memory:
             self._memory[id] = messages
         else:
-            victim = self._mem_queue.pop(1)
+            victim = self._mem_queue.pop(0)
             if victim: self._memory.__delitem__(victim)
             self._mem_queue.append(id)
             self._memory[id] = messages
