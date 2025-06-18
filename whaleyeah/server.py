@@ -108,13 +108,16 @@ def serve_config(config: PathLike) -> None:
     # job_task = asyncio.create_task(app.job_queue.start())
 
 
-    logger.info(f"Listening {config["listen"]}")
-    app.run_webhook(
-        listen=config["listen"].split(":")[0],
-        port=int(config["listen"].split(":")[1]),
-        webhook_url=config["webhook"],
-        url_path=config["webhook"].split("://")[-1].split("/", maxsplit=1)[-1],
-        allowed_updates=Update.ALL_TYPES,
-        secret_token=None if "secret" not in config else config["secret"],
-    )
-    # app.run_polling(allowed_updates=Update.ALL_TYPES)
+    if "webhook" in config:
+        logger.info(f"Webhook is listening on {config["listen"]}")
+        app.run_webhook(
+            listen=config["listen"].split(":")[0],
+            port=int(config["listen"].split(":")[1]),
+            webhook_url=config["webhook"],
+            url_path=config["webhook"].split("://")[-1].split("/", maxsplit=1)[-1],
+            allowed_updates=Update.ALL_TYPES,
+            secret_token=None if "secret" not in config else config["secret"],
+        )
+    else:
+        logger.info(f"Start polling mode...")
+        app.run_polling(allowed_updates=Update.ALL_TYPES)
