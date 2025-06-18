@@ -11,6 +11,8 @@ from telegram import Update, InlineQueryResultArticle, InputTextMessageContent, 
 from telegram.ext import MessageHandler, InlineQueryHandler, ContextTypes, filters
 from telegram.constants import ParseMode
 
+from telegramify_markdown import markdownify
+
 from .database import mob
 from .megaphone import _megaphone_callback
 
@@ -250,7 +252,7 @@ async def _iwaku_locate_callback(update: Update, context: ContextTypes.DEFAULT_T
                 update.message.delete(),
                 bot.send_message(
                     chat_id=msg.chat_id,
-                    text=f"^ (by [{msg.from_user.full_name}](tg://user?id={msg.from_user.id}))",
+                    text=markdownify(f"^ (by [{msg.from_user.full_name}](tg://user?id={msg.from_user.id}))"),
                     parse_mode=ParseMode.MARKDOWN_V2,
                     reply_parameters=ReplyParameters(chat_id=commands[1], message_id=commands[2])
                 ),
