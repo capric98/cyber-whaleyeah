@@ -173,7 +173,6 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         message = {
             "role": "user",
-            "name": str(sender.id),
             "content": [
                 {
                     "type": "image_url",
@@ -195,7 +194,6 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         message = {
             "role": "user",
-            "name": str(sender.id),
             "content": effective_text,
         }
 
