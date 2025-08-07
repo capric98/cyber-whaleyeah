@@ -57,7 +57,7 @@ class OpenAIBot:
         messages.append(message)
 
 
-        if not self.model.startswith("gpt5"):
+        if not self.model.startswith("gpt-5"):
             stream = await client.chat.completions.create(
                 messages=messages,
                 model=self.model,
