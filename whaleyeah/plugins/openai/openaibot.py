@@ -108,7 +108,7 @@ class OpenAIBot:
                     messages.append({
                         "type": "custom_tool_call_output",
                         "call_id": item.call_id,
-                        "output": await self.python_exec(item),
+                        "output": await self.python_exec(item.input),
                     })
                     flag_has_exec = True
 
