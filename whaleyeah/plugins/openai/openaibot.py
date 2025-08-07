@@ -22,6 +22,7 @@ class OpenAIBot:
         self._memory    = {}
         self._wlchatids = config["whitelist_chat"]
         self._whitelist = {}
+        self._tools     = config.get("tools", [])
 
         if "command" in config:
             global __COMMAND__
@@ -30,6 +31,9 @@ class OpenAIBot:
     @property
     def model(self) -> str:
         return self._MODEL
+    @property
+    def tools(self) -> str:
+        return self._tools
     @property
     def whitelist(self) -> dict:
         return self._whitelist
@@ -46,29 +50,40 @@ class OpenAIBot:
             self._mem_queue.append(id)
             self._memory[id] = messages
 
-    async def request(self, message: dict, id: str="") -> str:
+    async def request(self, message: dict, id: str="") -> tuple[str, list]:
         client = AsyncOpenAI(api_key=self._API_KEY)
 
         messages = self._memory[id] if id in self._memory else []
         messages.append(message)
 
-        stream = await client.chat.completions.create(
-            messages=messages,
-            model=self._MODEL,
-            stream=True,
-        )
 
-        resp = ""
-        async for chunk in stream:
-            if chunk.choices[0].delta.content:
-                resp += chunk.choices[0].delta.content
+        if not self.model.startswith("gpt5"):
+            stream = await client.chat.completions.create(
+                messages=messages,
+                model=self.model,
+                stream=True,
+            )
+
+            output_text = ""
+            async for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    output_text += chunk.choices[0].delta.content
+        else:
+            # streaming newest models requires verification
+            resp = await client.responses.create(
+                input=messages,
+                model=self.model,
+                tools=self.tools,
+            )
+            output_text = resp.output_text
+
 
         messages.append({
             "role": "assistant",
-            "content": resp,
+            "content": output_text,
         })
 
-        return resp, messages
+        return output_text, messages
 
 
 oai = None
