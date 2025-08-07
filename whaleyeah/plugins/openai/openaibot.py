@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import mimetypes
+import sys
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
@@ -50,6 +52,23 @@ class OpenAIBot:
             self._mem_queue.append(id)
             self._memory[id] = messages
 
+    async def python_exec(self, input: str) -> str:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-c",
+            input,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
+        # await proc.communicate() waits for the process to finish and reads stdout/stderr
+        stdout, stderr = await proc.communicate()
+
+        output = stdout.decode().strip() if proc.returncode==0 else stderr.decode().strip()
+        if proc.returncode!=0: logging.error(output)
+
+        return output
+
     async def request(self, message: dict, id: str="") -> tuple[str, list]:
         client = AsyncOpenAI(api_key=self._API_KEY)
 
@@ -68,6 +87,11 @@ class OpenAIBot:
             async for chunk in stream:
                 if chunk.choices[0].delta.content:
                     output_text += chunk.choices[0].delta.content
+
+            messages.append({
+                "role": "assistant",
+                "content": output_text,
+            })
         else:
             # streaming newest models requires verification
             resp = await client.responses.create(
@@ -75,13 +99,29 @@ class OpenAIBot:
                 model=self.model,
                 tools=self.tools,
             )
+            messages.append(resp.output)
             output_text = resp.output_text
 
+            flag_has_exec = True
+            for item in resp.output:
+                if item.type == "custom_tool_call" and item.name == "python_exec":
+                    messages.append({
+                        "type": "custom_tool_call_output",
+                        "call_id": item.call_id,
+                        "output": await self.python_exec(item),
+                    })
+                    flag_has_exec = True
 
-        messages.append({
-            "role": "assistant",
-            "content": output_text,
-        })
+            if flag_has_exec:
+                resp = await client.responses.create(
+                    input=messages,
+                    model=self.model,
+                    tools=self.tools,
+                )
+                messages.append(resp.output)
+                output_text += resp.output_text
+
+
 
         return output_text, messages
 
