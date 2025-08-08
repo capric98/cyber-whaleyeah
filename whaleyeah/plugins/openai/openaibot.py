@@ -1,7 +1,8 @@
 import asyncio
+import json
 import logging
 import mimetypes
-import sys
+
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
@@ -10,6 +11,7 @@ from openai import AsyncOpenAI
 from telegramify_markdown import markdownify
 
 from whaleyeah.plugins.openai_compatible import xgg_pb_link, tg_typing_manager
+
 
 logger = logging.getLogger(__name__)
 
@@ -53,19 +55,24 @@ class OpenAIBot:
             self._memory[id] = messages
 
     async def python_exec(self, input: str) -> str:
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable,
-            "-c",
-            input,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
+        lines = input.strip().splitlines()
+        setup_code = "\n".join(lines[:-1])
+        final_expression = lines[-1]
 
-        # await proc.communicate() waits for the process to finish and reads stdout/stderr
-        stdout, stderr = await proc.communicate()
+        logging.info(f"exec python code: \n{setup_code}")
+        logging.info(f"eval with: {final_expression}")
 
-        output = stdout.decode().strip() if proc.returncode==0 else stderr.decode().strip()
-        if proc.returncode!=0: logging.error(output)
+        local_vars = {}
+        try:
+            await asyncio.sleep(0)
+            exec(setup_code, {"__builtins__": __builtins__}, local_vars)
+            result = eval(final_expression, {"__builtins__": __builtins__}, local_vars)
+
+            output = json.dumps(result)
+            logging.info(f"exec results: {output}")
+
+        except Exception as e:
+            output = json.dumps({"error": str(e)})
 
         return output
 
@@ -99,8 +106,11 @@ class OpenAIBot:
                 model=self.model,
                 tools=self.tools,
             )
-            messages.append(resp.output)
             output_text = resp.output_text
+            messages.append({
+                "role": "assistant",
+                "content": output_text,
+            })
 
             flag_has_exec = True
             for item in resp.output:
@@ -108,7 +118,10 @@ class OpenAIBot:
                     messages.append({
                         "type": "custom_tool_call_output",
                         "call_id": item.call_id,
-                        "output": await self.python_exec(item.input),
+                        "output": await asyncio.wait_for(
+                            self.python_exec(item.input),
+                            timeout=10,
+                        )
                     })
                     flag_has_exec = True
 
@@ -118,8 +131,11 @@ class OpenAIBot:
                     model=self.model,
                     tools=self.tools,
                 )
-                messages.append(resp.output)
                 output_text += resp.output_text
+                messages.append({
+                    "role": "assistant",
+                    "content": resp.output_text,
+                })
 
 
 
