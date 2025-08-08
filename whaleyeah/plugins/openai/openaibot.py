@@ -26,7 +26,7 @@ class OpenAIBot:
         self._memory    = {}
         self._wlchatids = config["whitelist_chat"]
         self._whitelist = {}
-        self._tools     = config.get("tools", [])
+        self._create_params = config.get("create_params", {})
 
         if "command" in config:
             global __COMMAND__
@@ -36,8 +36,8 @@ class OpenAIBot:
     def model(self) -> str:
         return self._MODEL
     @property
-    def tools(self) -> str:
-        return self._tools
+    def create_params(self) -> dict:
+        return self._create_params
     @property
     def whitelist(self) -> dict:
         return self._whitelist
@@ -104,7 +104,7 @@ class OpenAIBot:
             resp = await client.responses.create(
                 input=messages,
                 model=self.model,
-                tools=self.tools,
+                **self.create_params,
             )
             output_text = resp.output_text
             messages.append({
@@ -112,30 +112,30 @@ class OpenAIBot:
                 "content": output_text,
             })
 
-            flag_has_exec = True
-            for item in resp.output:
-                if item.type == "custom_tool_call" and item.name == "python_exec":
-                    messages.append({
-                        "type": "custom_tool_call_output",
-                        "call_id": item.call_id,
-                        "output": await asyncio.wait_for(
-                            self.python_exec(item.input),
-                            timeout=10,
-                        )
-                    })
-                    flag_has_exec = True
+            # flag_has_exec = True
+            # for item in resp.output:
+            #     if item.type == "custom_tool_call" and item.name == "python_exec":
+            #         messages.append({
+            #             "type": "custom_tool_call_output",
+            #             "call_id": item.call_id,
+            #             "output": await asyncio.wait_for(
+            #                 self.python_exec(item.input),
+            #                 timeout=10,
+            #             )
+            #         })
+            #         flag_has_exec = True
 
-            if flag_has_exec:
-                resp = await client.responses.create(
-                    input=messages,
-                    model=self.model,
-                    tools=self.tools,
-                )
-                output_text += resp.output_text
-                messages.append({
-                    "role": "assistant",
-                    "content": resp.output_text,
-                })
+            # if flag_has_exec:
+            #     resp = await client.responses.create(
+            #         input=messages,
+            #         model=self.model,
+            #         **self.create_params,
+            #     )
+            #     output_text += resp.output_text
+            #     messages.append({
+            #         "role": "assistant",
+            #         "content": resp.output_text,
+            #     })
 
 
 
