@@ -237,7 +237,7 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             "content": [
                 {
                     "type": "image_url" if not oai.use_responses_api else "input_image",
-                    "image_url": {"url": f"{f.file_path}"},
+                    "image_url": {"url": f"{f.file_path}"} if not oai.use_responses_api else f"{f.file_path}",
                 },
                 {
                     "type": "text" if not oai.use_responses_api else "input_text",
