@@ -28,6 +28,8 @@ class OpenAIBot:
         self._whitelist = {}
         self._create_params = config.get("create_params", {})
 
+        self._use_responses_api = self._MODEL.lower().startswith("gpt-5")
+
         if "command" in config:
             global __COMMAND__
             __COMMAND__ = config["command"]
@@ -44,6 +46,9 @@ class OpenAIBot:
     @property
     def whitelist_chat_ids(self) -> list:
         return self._wlchatids
+    @property
+    def use_responses_api(self) -> bool:
+        return self._use_responses_api
 
     def remember(self, messages: list, id: str) -> None:
         if id in self._memory:
@@ -83,7 +88,7 @@ class OpenAIBot:
         messages.append(message)
 
 
-        if not self.model.startswith("gpt-5"):
+        if not self.use_responses_api:
             stream = await client.chat.completions.create(
                 messages=messages,
                 model=self.model,
@@ -142,7 +147,7 @@ class OpenAIBot:
         return output_text, messages
 
 
-oai = None
+oai: OpenAIBot = None
 
 def get_handler(config: dict) -> CommandHandler:
     global oai
@@ -231,11 +236,11 @@ async def openai_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             "role": "user",
             "content": [
                 {
-                    "type": "image_url",
+                    "type": "image_url" if not oai.use_responses_api else "input_image",
                     "image_url": {"url": f"{f.file_path}"},
                 },
                 {
-                    "type": "text",
+                    "type": "text" if not oai.use_responses_api else "input_text",
                     "text": f"{effective_text}",
                 },
             ],
