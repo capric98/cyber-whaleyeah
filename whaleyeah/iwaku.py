@@ -170,7 +170,7 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 
 
-        filter = {"$text": {"$search": " ".join(query_tokens)}} if mob.use_text_search else {"$all": [{"tokens": v} for v in query_tokens]}
+        filter = {"$text": {"$search": " ".join(query_tokens)}} if mob.use_text_search else {"tokens": {"$all": query_tokens}}
 
         cursor = mob.history.find(filter)
         cursor = cursor.sort("date", -1)
