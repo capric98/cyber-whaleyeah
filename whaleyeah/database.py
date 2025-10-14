@@ -50,8 +50,8 @@ def init_database(db_config: dict):
         mob.use_text_search = db_config.get("use_text_search", False)
 
         if mob.use_text_search:
-            asyncio.run(mob.history.create_index([("tokens", "text")], default_language="none", background=True))
+            asyncio.get_event_loop().run_until_complete(mob.history.create_index([("tokens", "text")], default_language="none", background=True))
         else:
-            asyncio.run(mob.history.create_index("tokens", background=True))
+            asyncio.get_event_loop().run_until_complete(mob.history.create_index("tokens", background=True))
     except Exception as e:
         logger.warning(f"Error: '{e}'")
