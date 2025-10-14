@@ -82,6 +82,9 @@ class AnthropicBot:
 oai = None
 
 def get_handler(config: dict) -> CommandHandler:
+
+    logging.warning("anthropic handler is deprecated and will be removed in the future!")
+
     global oai_comp_dict
 
     oai = AnthropicBot(config)
@@ -223,7 +226,10 @@ async def anthropic_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 error_str = error_str.replace(token_part, "*"*len(token_part))
             await reply_target.reply_text(error_str)
         else:
-            msg = await reply_target.reply_markdown_v2(markdownify(resp))
+            msg = await reply_target.reply_markdown_v2(markdownify(
+                "*Anthropic handler is deprecated and will be removed in the future!*\n" +
+                resp
+            ))
             if msg:
                 oai.remember(messages, f"{msg.chat_id}<-{msg.id}")
 
