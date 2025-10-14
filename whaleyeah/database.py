@@ -41,7 +41,7 @@ def init_database(db_config: dict):
 
     try:
         logging.getLogger("pymongo").setLevel(logging.WARNING)
-        client = AsyncIOMotorClient(db_config["uri"])
+        client = AsyncIOMotorClient(db_config["uri"], io_loop=asyncio.get_event_loop())
         mob.database = client.get_database(db_config["db_name"])
         mob.history  = mob.database.get_collection("history")
         mob.tokens   = mob.database.get_collection("tokens")
