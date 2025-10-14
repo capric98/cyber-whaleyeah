@@ -28,7 +28,11 @@ plugins_from_server = {}
 _iwaku_uid_whitelist = {}
 
 def iwaku_history_handler() -> MessageHandler:
-    asyncio.get_event_loop().run_until_complete(mob.history.create_index("tokens"))
+    if mob.use_text_search:
+        asyncio.run(mob.history.create_index([("tokens", "text")], default_language="none", background=True))
+    else:
+        asyncio.run(mob.history.create_index("tokens", background=True))
+
     jieba.setLogLevel(logger.getEffectiveLevel())
     return MessageHandler(filters=None, callback=_iwaku_history_callback)
 def iwaku_inline_handler() -> InlineQueryHandler:
@@ -89,8 +93,7 @@ async def _iwaku_history_callback(update: Update, context: ContextTypes.DEFAULT_
             return
 
 
-    seg = await asyncio.to_thread(jieba.cut_for_search, text)
-    seg = prefix + [s for s in seg]
+    seg = prefix + await asyncio.to_thread(jieba.lcut_for_search, text)
 
     text = "".join(prefix) + text
 
@@ -146,7 +149,7 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
         query = " ".join(query)
 
     query        = query.strip()
-    query_tokens = await asyncio.to_thread(jieba.cut_for_search, query)
+    query_tokens = await asyncio.to_thread(jieba.lcut_for_search, query)
     query_tokens = trim_tokens(query_tokens)
 
     if query_tokens:
@@ -171,11 +174,8 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
         elif not _iwaku_uid_whitelist[update.inline_query.from_user.id]: return
 
 
-        filter = {"$and": [{"tokens": v} for v in query_tokens]}
-        # logger.debug(filter)
 
-
-
+        filter = {"$text": {"$search": " ".join(query_tokens)}} if mob.use_text_search else {"$all": [{"tokens": v} for v in query_tokens]}
 
         cursor = mob.history.find(filter)
         cursor = cursor.sort("date", -1)
