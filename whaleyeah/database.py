@@ -6,10 +6,10 @@ from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
 
 class MobClass:
     def __init__(self) -> None:
-        self._database = None
-        self._history  = None
-        self._tokens   = None
-        self._GROUP_ID = -1
+        self.database = None
+        self.history  = None
+        self.tokens   = None
+        self.GROUP_ID = -1
 
         self.use_text_search = False
 
@@ -28,6 +28,9 @@ class MobClass:
     @property
     def GROUP_ID(self) -> int:
         return self._GROUP_ID
+    @property
+    def use_text_search(self) -> bool:
+        return self._use_text_search
 
 
 mob = MobClass()
