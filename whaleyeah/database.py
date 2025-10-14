@@ -42,11 +42,11 @@ def init_database(db_config: dict):
     try:
         logging.getLogger("pymongo").setLevel(logging.WARNING)
         client = AsyncIOMotorClient(db_config["uri"])
-        mob._database = client.get_database(db_config["db_name"])
-        mob._history  = mob.database.get_collection("history")
-        mob._tokens   = mob.database.get_collection("tokens")
+        mob.database = client.get_database(db_config["db_name"])
+        mob.history  = mob.database.get_collection("history")
+        mob.tokens   = mob.database.get_collection("tokens")
 
-        mob._GROUP_ID = db_config["IWAKU_GROUP_ID"]
+        mob.GROUP_ID = db_config["IWAKU_GROUP_ID"]
         mob.use_text_search = db_config.get("use_text_search", False)
 
         if mob.use_text_search:
