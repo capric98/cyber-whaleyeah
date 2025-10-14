@@ -28,11 +28,6 @@ plugins_from_server = {}
 _iwaku_uid_whitelist = {}
 
 def iwaku_history_handler() -> MessageHandler:
-    if mob.use_text_search:
-        asyncio.run(mob.history.create_index([("tokens", "text")], default_language="none", background=True))
-    else:
-        asyncio.run(mob.history.create_index("tokens", background=True))
-
     jieba.setLogLevel(logger.getEffectiveLevel())
     return MessageHandler(filters=None, callback=_iwaku_history_callback)
 def iwaku_inline_handler() -> InlineQueryHandler:

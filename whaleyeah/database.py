@@ -45,5 +45,10 @@ def init_database(db_config: dict):
 
         mob._GROUP_ID = db_config["IWAKU_GROUP_ID"]
         mob.use_text_search = db_config.get("use_text_search", False)
+
+        if mob.use_text_search:
+            asyncio.run(mob.history.create_index([("tokens", "text")], default_language="none", background=True))
+        else:
+            asyncio.run(mob.history.create_index("tokens", background=True))
     except Exception as e:
         logger.warning(f"Error: '{e}'")
