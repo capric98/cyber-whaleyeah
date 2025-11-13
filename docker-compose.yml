@@ -30,8 +30,10 @@ services:
         max-size: "100m"
         max-file: "3"
 
+  # MongoDB service:
+  # You may change the mongodb server version if needed, however ensure compatibility before upgrading.
   whaleyeah-mongodb:
-    image: mongodb/mongodb-community-server:latest
+    image: mongodb/mongodb-community-server:8.0-ubi8
     user: $MYUID:$MYGID
     restart: always
     command: mongod --config /etc/mongod.conf
