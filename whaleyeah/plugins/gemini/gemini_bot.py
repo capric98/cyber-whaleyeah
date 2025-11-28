@@ -2,6 +2,7 @@ import logging
 import mimetypes
 
 import asyncio
+import httpx
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
@@ -69,6 +70,14 @@ def get_handler(config: dict) -> CommandHandler:
         callback=gemini_callback,
     )
 
+
+async def get_url_bytes(url: str, timeout: float=10.0) -> tuple[bytes, str]:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, follow_redirects=True, timeout=timeout)
+        response.raise_for_status()
+        content_type = response.headers.get("content-type", "application/octet-stream")
+        content_type = content_type.split(";")[0].strip()
+        return (response.content, content_type)
 
 async def gemini_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
@@ -160,10 +169,13 @@ async def gemini_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         f = await pic.get_file()
         logger.debug(f"gemini attachment mode: file url -> {f.file_path}")
 
+        image_bytes, content_type = await get_url_bytes(f.file_path) # type: ignore
+        logger.debug(f"fetched attachment size: {len(image_bytes)} bytes, content_type: {content_type}")
+
         contents.append(genai_types.UserContent(
             parts = [
                 genai_types.Part.from_text(text=effective_text),
-                genai_types.Part.from_uri(file_uri=f.file_path), # type: ignore
+                genai_types.Part.from_bytes(data=image_bytes, mime_type=content_type),
             ]
         ))
 
