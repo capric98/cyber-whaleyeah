@@ -1,9 +1,7 @@
 import logging
 import mimetypes
-import uuid
 
 import asyncio
-import httpx
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
@@ -49,6 +47,7 @@ class GeminiBot:
                     model=self.model,
                     contents=contents,
                 )
+                return response
             except Exception as e:
                 response = e
                 logger.error(f"Error generating content: {e}")
