@@ -158,6 +158,7 @@ async def gemini_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             return
 
         f = await pic.get_file()
+        logger.debug(f"gemini attachment mode: file url -> {f.file_path}")
 
         contents.append(genai_types.UserContent(
             parts = [
@@ -169,6 +170,7 @@ async def gemini_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     # if has msg.caption, msg.text is empty?
     if msg.text:
+        logger.debug(f"gemini text mode: {msg.text}")
         effective_text = msg.text.removeprefix(f"/{command}").removeprefix(msg.get_bot().name).strip()
         if not effective_text:
             await reply_target.reply_text(f"食用方式：/{command}@{update.get_bot().name.removeprefix('@')} 你好")
