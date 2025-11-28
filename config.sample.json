@@ -4,7 +4,7 @@
     "listen": "0.0.0.0:8888",
     "↓DELETE_webhook_KEY_if_you_want_to_use_polling_mode": "",
     "webhook": "https://bot.domain.io/path",
-    "secret": "optional",
+    "secret": "optional-for-webhook-security",
     "database": {
         "uri": "mongodb://%2Ftmp%2Fmongodb.sock",
         "db_name": "whaleyeah",
