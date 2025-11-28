@@ -9,7 +9,9 @@ from telegram.ext import ContextTypes, CommandHandler
 
 from google import genai
 from google.genai import types as genai_types
+
 from telegramify_markdown import markdownify
+from humanfriendly import format_size, parse_size
 
 from whaleyeah.plugins.openai_compatible import xgg_pb_link, tg_typing_manager, remove_credentials
 
@@ -28,6 +30,9 @@ class GeminiBot:
 
         self.whitelist_chat_ids: list[int] = config.get("whitelist_chat", [])
         self.whitelist_cache: dict[int, bool] = {}
+
+        self.max_attach_size = parse_size(config.get("max_attachment_size", "10MiB"))
+
 
     def remember(self, id: str, contents: list) -> None:
         if id not in self.memory:
@@ -168,6 +173,10 @@ async def gemini_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             content_type = mimetypes.guess_type(url)[0] # type: ignore
             content_type = content_type if content_type else "image/jpeg" # default to jpeg, let google handle it XD
             logger.debug(f"fetched attachment size: {len(attachment_bytes)} bytes, content_type: {content_type}")
+
+            if len(attachment_bytes) > gemini.max_attach_size:
+                await reply_target.reply_text(f"附件超出{format_size(gemini.max_attach_size, binary=True)}大小限制！")
+                return
 
             parts.append(genai_types.Part.from_bytes(data=attachment_bytes, mime_type=content_type))
 
