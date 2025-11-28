@@ -1,1 +1,0 @@
-from .anthropic_bot import get_handler
