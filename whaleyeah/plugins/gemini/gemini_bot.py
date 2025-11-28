@@ -232,9 +232,16 @@ async def gemini_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
             resp_text: str = resp.text # type: ignore
-            if len(markdown_resp := markdownify(resp_text)) > 4000:
-                pb_url = await xgg_pb_link(resp_text, effective_text)
-                logger.info(f"too long response from /{command}, upload to pastebin: {pb_url}")
+
+            try:
+                markdown_resp = markdownify(resp_text)
+            except Exception as e:
+                logger.error(f"failed to markdownify: {e}")
+                markdown_resp = resp_text + " " * max(5000 - len(resp_text), 100)
+
+            if len(markdown_resp) > 4000:
+                pb_url = await xgg_pb_link(text=resp_text, title=effective_text)
+                logger.info(f"too long response, upload to pastebin: {pb_url}")
                 msg = await reply_target.reply_text(pb_url)
             else:
                 msg = await reply_target.reply_markdown_v2(markdown_resp)
