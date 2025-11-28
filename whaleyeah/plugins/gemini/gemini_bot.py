@@ -154,8 +154,20 @@ async def gemini_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         for atype in ["audio", "document"]:
             attachment = getattr(msg, atype, None)
             if attachment:
-                afile = await attachment.get_file()
-                attachment_urls.append(afile.file_path)
+                attachment_size = attachment.file_size
+                if attachment_size and attachment_size > gemini.max_attach_size:
+                    await reply_target.reply_text(f"附件超出{format_size(gemini.max_attach_size, binary=True)}大小限制！")
+                    return
+
+                try:
+                    afile = await attachment.get_file()
+                except Exception as e:
+                    error_str = f"failed to get attachment file: {e}"
+                    logger.warning(error_str)
+                    await reply_target.reply_text(remove_credentials(error_str, update.get_bot().token.split(":")))
+                    return
+                else:
+                    attachment_urls.append(afile.file_path)
 
 
         effective_text = msg.caption.removeprefix(f"/{command}").removeprefix(msg.get_bot().name).strip()
