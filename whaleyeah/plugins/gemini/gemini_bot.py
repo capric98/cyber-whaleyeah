@@ -71,13 +71,11 @@ def get_handler(config: dict) -> CommandHandler:
     )
 
 
-async def get_url_bytes(url: str, timeout: float=10.0) -> tuple[bytes, str]:
+async def get_url_bytes(url: str, timeout: float=10.0) -> bytes:
     async with httpx.AsyncClient() as client:
         response = await client.get(url, follow_redirects=True, timeout=timeout)
         response.raise_for_status()
-        content_type = response.headers.get("content-type", "application/octet-stream")
-        content_type = content_type.split(";")[0].strip()
-        return (response.content, content_type)
+        return response.content
 
 async def gemini_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
@@ -169,7 +167,10 @@ async def gemini_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         f = await pic.get_file()
         logger.debug(f"gemini attachment mode: file url -> {f.file_path}")
 
-        image_bytes, content_type = await get_url_bytes(f.file_path) # type: ignore
+        image_bytes = await get_url_bytes(f.file_path) # type: ignore
+        content_type = mimetypes.guess_type(f.file_path)[0] # type: ignore
+        content_type = content_type if content_type else "image/jpeg" # default to jpeg, let google handle it XD
+
         logger.debug(f"fetched attachment size: {len(image_bytes)} bytes, content_type: {content_type}")
 
         contents.append(genai_types.UserContent(
