@@ -137,48 +137,42 @@ async def gemini_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
     if msg.caption:
-        pic = msg.photo
-        doc = msg.document
-        if pic:
+        attachment_urls = []
+
+        if pic:=msg.photo:
             pic = list(pic)
             pic.sort(key=lambda v: v.width, reverse=True)
             pic = pic[0]
-        elif doc:
-            pic = doc
+            pic_file = await pic.get_file()
+            attachment_urls.append(pic_file.file_path)
 
-            try:
-                if not mimetypes.guess_type(pic.file_name)[0].startswith("image"): # type: ignore
-                    # TODO: handle other document type
-                    await reply_target.reply_text(text="尚不支持图片以外的文件哦😭")
-                    return
-            except Exception as e:
-                await reply_target.reply_text(text="解析附件时出错😭")
-                logger.error(f"Error parsing attachment: {e}")
-                return
-        else:
-            await reply_target.reply_text(text="尚不支持图片以外的文件哦😭")
-            return
+        for atype in ["audio", "document"]:
+            attachment = getattr(msg, atype, None)
+            if attachment:
+                afile = await attachment.get_file()
+                attachment_urls.append(afile.file_path)
+
 
         effective_text = msg.caption.removeprefix(f"/{command}").removeprefix(msg.get_bot().name).strip()
         if not effective_text:
             await reply_target.reply_text(f"食用方式：/{command}@{update.get_bot().name.removeprefix('@')} 你好")
             return
 
-        f = await pic.get_file()
-        logger.debug(f"gemini attachment mode: file url -> {f.file_path}")
 
-        image_bytes = await get_url_bytes(f.file_path) # type: ignore
-        content_type = mimetypes.guess_type(f.file_path)[0] # type: ignore
-        content_type = content_type if content_type else "image/jpeg" # default to jpeg, let google handle it XD
+        parts = [genai_types.Part.from_text(text=effective_text)]
 
-        logger.debug(f"fetched attachment size: {len(image_bytes)} bytes, content_type: {content_type}")
+        for url in attachment_urls:
+            logger.debug(f"gemini attachment mode: file url -> {url}")
 
-        contents.append(genai_types.UserContent(
-            parts = [
-                genai_types.Part.from_text(text=effective_text),
-                genai_types.Part.from_bytes(data=image_bytes, mime_type=content_type),
-            ]
-        ))
+            attachment_bytes = await get_url_bytes(url) # type: ignore
+            content_type = mimetypes.guess_type(url)[0] # type: ignore
+            content_type = content_type if content_type else "image/jpeg" # default to jpeg, let google handle it XD
+            logger.debug(f"fetched attachment size: {len(attachment_bytes)} bytes, content_type: {content_type}")
+
+            parts.append(genai_types.Part.from_bytes(data=attachment_bytes, mime_type=content_type))
+
+
+        contents.append(genai_types.UserContent(parts = parts))
 
 
     # if has msg.caption, msg.text is empty?
