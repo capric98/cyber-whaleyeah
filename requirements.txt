@@ -1,5 +1,6 @@
 APScheduler~=3.11.0
 anthropic~=0.69.0
+google-genai~=1.52.0
 ijson~=3.4.0
 jieba~=0.42.1
 motor~=3.7.1

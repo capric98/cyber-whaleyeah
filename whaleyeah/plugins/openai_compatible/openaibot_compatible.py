@@ -7,7 +7,6 @@ import httpx
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
-from telegram.request import HTTPXRequest
 
 from openai import AsyncOpenAI
 from telegramify_markdown import markdownify

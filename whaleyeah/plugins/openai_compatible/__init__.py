@@ -1,2 +1,2 @@
 from .openaibot_compatible import get_handler
-from .openaibot_compatible import xgg_pb_link, tg_typing_manager
+from .openaibot_compatible import xgg_pb_link, tg_typing_manager, remove_credentials
