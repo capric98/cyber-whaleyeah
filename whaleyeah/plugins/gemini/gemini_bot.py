@@ -12,6 +12,7 @@ from google.genai import types as genai_types
 
 from telegramify_markdown import markdownify
 from humanfriendly import format_size, parse_size
+from inflection import camelize
 
 from whaleyeah.plugins.openai_compatible import xgg_pb_link, tg_typing_manager, remove_credentials
 
@@ -34,6 +35,20 @@ class GeminiBot:
         self.max_attach_size = parse_size(config.get("max_attachment_size", "10MiB"))
 
 
+        gen_tools = []
+        for tool_name in config.get("tools", []):
+            tool_camel = camelize(tool_name, uppercase_first_letter=True)
+            tool_class = getattr(genai_types, tool_camel, None)
+            if tool_class is not None:
+                logger.info(f"Enabling Gemini tool: {tool_name} = {tool_class}")
+                gen_tools.append(genai_types.Tool(**{tool_name: tool_class}))
+
+        logger.info(f"Gemini tools:\n  {'\n  '.join(gen_tools)}")
+        self.generate_config = genai_types.GenerateContentConfig(
+            tools=gen_tools,
+        )
+
+
     def remember(self, id: str, contents: list) -> None:
         if id not in self.memory:
             if victim_id:=self.mem_queue.pop(0):
@@ -52,6 +67,7 @@ class GeminiBot:
                 response = await self.client.aio.models.generate_content(
                     model=self.model,
                     contents=contents,
+                    config=self.generate_config,
                 )
                 return response
             except Exception as e:
@@ -231,14 +247,31 @@ async def gemini_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 return
 
 
-            resp_text: str = resp.text # type: ignore
+            resp_text: str = ""
+            resp_image: genai_types.Image | None = None
 
+            for part in resp.candidates[0].content.parts: # type: ignore
+                part: genai_types.Part = part
+
+                if part.inline_data is not None:
+                    # Currently only images are supported as inline_data:
+                    # https://github.com/googleapis/python-genai/blob/5b50adce2a76cb77bef067bc0a624d111d39c2dc/google/genai/types.py#L1432
+                    resp_image = part.as_image()
+
+                for part_attr_name in ["text", "executable_code", "code_execution_result"]:
+                    part_attr_value = getattr(part, part_attr_name, None)
+                    if part_attr_value is not None:
+                        resp_text += f"{part_attr_value}\n"
+
+
+            # Covert to markdown, if failed or too long, send a pastebin link instead.
             try:
                 markdown_resp = markdownify(resp_text)
             except Exception as e:
                 logger.error(f"failed to markdownify: {e}")
                 markdown_resp = resp_text + " " * max(5000 - len(resp_text), 100)
 
+            # Send the reply.
             if len(markdown_resp) > 4000:
                 pb_url = await xgg_pb_link(text=resp_text, title=effective_text)
                 logger.info(f"too long response, upload to pastebin: {pb_url}")
@@ -246,9 +279,15 @@ async def gemini_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             else:
                 msg = await reply_target.reply_markdown_v2(markdown_resp)
 
+            # If there's an image, send it as well.
+            if resp_image:
+                await reply_target.reply_photo(photo=resp_image.image_bytes) # type: ignore
+
+            # If reply successful, remember the conversation.
             if msg:
                 contents.append(genai_types.ModelContent(resp_text))
                 gemini.remember(f"msg {msg.id} in chat {msg.chat_id}", contents=contents)
+
         except Exception as e:
             logger.error(e)
             error_str = remove_credentials(f"{e}", update.get_bot().token.split(":"))
