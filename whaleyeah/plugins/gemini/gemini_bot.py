@@ -249,8 +249,10 @@ class GeminiBot:
                         error_str = remove_credentials(f"{resp}", update.get_bot().token.split(":"))
                         await reply_target.reply_text("生成内容时出错:\n" + error_str)
                         return
+                    else: logger.debug(resp)
 
 
+                    msg = None
                     resp_text: str = ""
                     resp_image: genai_types.Image | None = None
 
@@ -268,24 +270,27 @@ class GeminiBot:
                                 resp_text += f"{part_attr_value}\n"
 
 
-                    # Covert to markdown, if failed or too long, send a pastebin link instead.
-                    try:
-                        markdown_resp = markdownify(resp_text)
-                    except Exception as e:
-                        logger.error(f"failed to markdownify: {e}")
-                        markdown_resp = resp_text + " " * max(5000 - len(resp_text), 100)
+                    # Model may response an image only.
+                    if resp_text:
+                        # Covert to markdown, if failed or too long, send a pastebin link instead.
+                        try:
+                            markdown_resp = markdownify(resp_text)
+                        except Exception as e:
+                            logger.error(f"failed to markdownify: {e}")
+                            markdown_resp = resp_text + " " * max(5000 - len(resp_text), 100)
 
-                    # Send the reply.
-                    if len(markdown_resp) > 4000:
-                        pb_url = await xgg_pb_link(text=resp_text, title=effective_text)
-                        logger.info(f"too long response, upload to pastebin: {pb_url}")
-                        msg = await reply_target.reply_text(pb_url)
-                    else:
-                        msg = await reply_target.reply_markdown_v2(markdown_resp)
+                        # Send the reply.
+                        if len(markdown_resp) > 4000:
+                            pb_url = await xgg_pb_link(text=resp_text, title=effective_text)
+                            logger.info(f"too long response, upload to pastebin: {pb_url}")
+                            msg = await reply_target.reply_text(pb_url)
+                        else:
+                            msg = await reply_target.reply_markdown_v2(markdown_resp)
 
                     # If there's an image, send it as well.
                     if resp_image:
-                        await reply_target.reply_photo(photo=resp_image.image_bytes) # type: ignore
+                        imsg = await reply_target.reply_photo(photo=resp_image.image_bytes) # type: ignore
+                        msg = msg if msg else imsg # prefer text message as msg
 
                     # If reply successful, remember the conversation.
                     if msg:
