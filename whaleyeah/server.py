@@ -7,7 +7,7 @@ from importlib import import_module
 from telegram import Update
 from telegram.ext import Application, ContextTypes
 from telegram.ext import CommandHandler
-from telegramify_markdown import markdownify
+from telegramify_markdown import markdownify, customize
 
 from .iwaku import iwaku_history_handler, iwaku_inline_handler, iwaku_locate_handler, iwaku_plugins_copy
 from .database import init_database
@@ -29,7 +29,7 @@ async def _helper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 def serve_config(config: PathLike) -> None:
     with open(config, "r", encoding="utf-8") as f:
-        config = json.load(f)
+        config: dict = json.load(f)
 
     if "log_level" not in config: config["log_level"] = "info"
 
@@ -39,6 +39,16 @@ def serve_config(config: PathLike) -> None:
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logger = logging.getLogger(__name__)
+
+
+    md_config = config.get("markdown_customize", {})
+    md_render_config = customize.get_runtime_config()
+    md_render_config.cite_expandable = md_config.get("cite_expandable", md_render_config.cite_expandable)
+    md_render_config.unescape_html = md_config.get("unescape_html", md_render_config.unescape_html)
+    md_render_config.markdown_symbol.head_level_1 = md_config.get("head_level_1", md_render_config.markdown_symbol.head_level_1)
+    md_render_config.markdown_symbol.head_level_2 = md_config.get("head_level_2", md_render_config.markdown_symbol.head_level_2)
+    md_render_config.markdown_symbol.head_level_3 = md_config.get("head_level_3", md_render_config.markdown_symbol.head_level_3)
+    md_render_config.markdown_symbol.head_level_4 = md_config.get("head_level_4", md_render_config.markdown_symbol.head_level_4)
 
 
     init_database(config["database"])
