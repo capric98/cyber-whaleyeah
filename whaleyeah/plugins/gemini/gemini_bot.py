@@ -49,12 +49,12 @@ class GeminiBot:
                 try:
                     gen_tools.append(genai_types.Tool(**{tool_rname: tool_class}))
                 except Exception as e:
-                    logger.error(f"Failed to enable Gemini tool {tool_name}: {e}")
+                    logger.error(f"Failed to enable Gemini tool {tool_rname}: {e}")
                 else:
-                    logger.info(f"Enabling Gemini tool: {tool_name} = {tool_class}")
+                    logger.info(f"Enabling Gemini tool: {tool_rname} = {tool_class}")
 
 
-        logger.info(f"Gemini tools:\n  {'\n  '.join(gen_tools)}")
+        logger.info(f"Gemini tools:\n  {'\n  '.join([str(tool) for tool in gen_tools])}")
         self.generate_config = genai_types.GenerateContentConfig(
             tools=gen_tools,
         )
