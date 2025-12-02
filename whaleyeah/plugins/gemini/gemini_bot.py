@@ -36,12 +36,22 @@ class GeminiBot:
 
 
         gen_tools = []
+
         for tool_name in config.get("tools", []):
+
+            tool_name  = tool_name.strip().lower()
             tool_camel = camelize(tool_name, uppercase_first_letter=True)
             tool_class = getattr(genai_types, tool_camel, None)
+            tool_rname = tool_name.remove_prefix("tool_")
+
             if tool_class is not None:
-                logger.info(f"Enabling Gemini tool: {tool_name} = {tool_class}")
-                gen_tools.append(genai_types.Tool(**{tool_name: tool_class}))
+                try:
+                    gen_tools.append(genai_types.Tool(**{tool_rname: tool_class}))
+                except Exception as e:
+                    logger.error(f"Failed to enable Gemini tool {tool_name}: {e}")
+                else:
+                    logger.info(f"Enabling Gemini tool: {tool_name} = {tool_class}")
+
 
         logger.info(f"Gemini tools:\n  {'\n  '.join(gen_tools)}")
         self.generate_config = genai_types.GenerateContentConfig(
