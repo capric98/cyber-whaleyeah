@@ -54,7 +54,7 @@ class GeminiBot:
                     logger.info(f"Enabling Gemini tool: {tool_rname} = {tool_class}")
 
 
-        logger.info(f"Gemini tools:\n  {'\n  '.join([str(tool) for tool in gen_tools])}")
+        logger.debug(f"Gemini tools:\n  {'\n  '.join([str(tool) for tool in gen_tools])}")
         self.generate_config = genai_types.GenerateContentConfig(
             tools=gen_tools,
         )
