@@ -39,10 +39,11 @@ class GeminiBot:
 
         for tool_name in config.get("tools", []):
 
-            tool_name  = tool_name.strip().lower()
+            tool_name: str  = tool_name.strip().lower()
+
             tool_camel = camelize(tool_name, uppercase_first_letter=True)
             tool_class = getattr(genai_types, tool_camel, None)
-            tool_rname = tool_name.remove_prefix("tool_")
+            tool_rname = tool_name.removeprefix("tool_")
 
             if tool_class is not None:
                 try:
