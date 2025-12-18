@@ -107,6 +107,10 @@ class GeminiBot:
             msg  = update.effective_message
             if not msg: return
 
+            if update.edited_message:
+                await msg.reply_text("暂不支持更新对话内容！请重新发送更新后的对话内容。")
+                return
+
             if msg.caption:
                 command = msg.caption.split(" ", maxsplit=1)[0]
             else:
