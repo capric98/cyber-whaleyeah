@@ -49,9 +49,9 @@ def get_handler(config: dict):
 
         if defcon_level != -1:
             trend_text = "上升" if current_defcon_level > defcon_level else "下降"
-            resp_text  = f"等级由 **DEFCON {defcon_level}** {trend_text}到 **DEFCON {current_defcon_level}**"
+            resp_text  = f"披萨指数由 **DEFCON {defcon_level}** {trend_text}至 **DEFCON {current_defcon_level}**"
         else:
-            resp_text = f"当前等级：**DEFCON {current_defcon_level}**\n"
+            resp_text = f"当前披萨指数：**DEFCON {current_defcon_level}**\n"
 
             current_beijing_time = datetime.now(ZoneInfo("Asia/Shanghai")).isoformat()
 
