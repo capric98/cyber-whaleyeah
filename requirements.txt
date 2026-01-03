@@ -12,3 +12,4 @@ six~=1.17.0
 telegramify-markdown~=0.5.2
 tornado~=6.5.2
 urllib3~=2.5.0
+httpx~=0.28.1
