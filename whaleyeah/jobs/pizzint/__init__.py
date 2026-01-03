@@ -1,0 +1,1 @@
+from .pizza_index import get_handler
