@@ -42,13 +42,23 @@ def get_handler(config: dict):
         nonlocal defcon_level
 
         current_defcon_level, resp, success = await _get_pizza_index()
+
+        # failed to get pizza index, or defcon level is not updated
+        # log warning and return
         if not success or current_defcon_level == -1:
             logger.warning(f"failed to get pizza index: {resp}")
             return
 
+        # first time get defcon level, store but not notify
+        # if defcon_level == -1:
+        #     defcon_level = current_defcon_level
+        #     return
+
+        # lower defcon level means higher risk
+        higher_risk = current_defcon_level < defcon_level
 
         if defcon_level != -1:
-            trend_text = "上升" if current_defcon_level > defcon_level else "下降"
+            trend_text = "上升" if higher_risk else "下降"
             resp_text  = f"披萨指数由 **DEFCON {defcon_level}** {trend_text}至 **DEFCON {current_defcon_level}**"
         else:
             resp_text = f"当前披萨指数：**DEFCON {current_defcon_level}**\n"
@@ -61,7 +71,7 @@ def get_handler(config: dict):
 
             resp_text += f"*更新于北京时间 {defcon_at_time}*"
 
-
+        resp_text += "\n*lower index means higher risk*"
         resp_text = markdownify(resp_text)
 
 
