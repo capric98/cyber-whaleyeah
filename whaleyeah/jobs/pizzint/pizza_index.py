@@ -23,13 +23,6 @@ client = httpx.AsyncClient(
 )
 
 pizzint_endpoint = "https://www.pizzint.watch/api/dashboard-data"
-pizza_index_desc = [
-    "最高等级，大的要来了。",           # 1 -> emergency
-    "临战等级，五角大楼通宵达旦。",      # 2 -> critical
-    "警戒等级，可能出现紧张局势。",      # 3 -> alert
-    "日常等级，一切正常。",            # 4 -> warning
-    "最低等级，今日无事。",            # 5 -> normal
-]
 
 
 async def _get_pizza_index() -> tuple[int, dict, bool]:
@@ -42,6 +35,15 @@ async def _get_pizza_index() -> tuple[int, dict, bool]:
 
 def get_handler(config: dict):
     pizza_index_notify_chats = list(config.get("chat_id", []))
+
+    # default descriptions
+    pizza_index_desc = [
+        "最高等级，大的要来了。",           # 1 -> critical
+        "临战等级，五角大楼通宵达旦。",      # 2 -> emergency
+        "警戒等级，可能出现紧张局势。",      # 3 -> alert
+        "日常等级，一切正常。",            # 4 -> warning
+        "最低等级，今日无事。",            # 5 -> normal
+    ]
     pizza_index_desc = list(config.get("description", pizza_index_desc))
     pizza_index_desc.insert(0, "DEFCON等级从1~5，等级越低风险越高") # pizza index starts from 1
 
