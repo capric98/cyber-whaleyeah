@@ -23,6 +23,13 @@ client = httpx.AsyncClient(
 )
 
 pizzint_endpoint = "https://www.pizzint.watch/api/dashboard-data"
+pizza_index_desc = [
+    "最高等级，大的要来了。",           # 1 -> emergency
+    "临战等级，五角大楼通宵达旦。",      # 2 -> critical
+    "警戒等级，可能出现紧张局势。",      # 3 -> alert
+    "日常等级，一切正常。",            # 4 -> warning
+    "最低等级，今日无事。",            # 5 -> normal
+]
 
 
 async def _get_pizza_index() -> tuple[int, dict, bool]:
@@ -35,8 +42,10 @@ async def _get_pizza_index() -> tuple[int, dict, bool]:
 
 def get_handler(config: dict):
     pizza_index_notify_chats = list(config.get("chat_id", []))
-    defcon_level = -1
+    pizza_index_desc = list(config.get("description", pizza_index_desc))
+    pizza_index_desc.insert(0, "DEFCON等级从1~5，等级越低风险越高") # pizza index starts from 1
 
+    defcon_level = -1
 
     async def callback(ctx: CallbackContext):
         nonlocal defcon_level
@@ -54,24 +63,32 @@ def get_handler(config: dict):
         #     defcon_level = current_defcon_level
         #     return
 
-        # lower defcon level means higher risk
-        higher_risk = current_defcon_level < defcon_level
+        resp_text = f"当前披萨指数：**DEFCON {current_defcon_level}**"
 
-        if defcon_level != -1:
-            trend_text = "上升" if higher_risk else "下降"
-            resp_text  = f"披萨指数由 **DEFCON {defcon_level}** {trend_text}至 **DEFCON {current_defcon_level}**"
-        else:
-            resp_text = f"当前披萨指数：**DEFCON {current_defcon_level}**\n"
+        if 0 < current_defcon_level < len(pizza_index_desc):
+            trend_text = "\n披萨指数"
 
+            if defcon_level != -1:
+                # lower defcon level means higher risk
+                higher_risk = current_defcon_level < defcon_level
+                trend_text += "上升至" if higher_risk else "下降至"
+            else:
+                trend_text += "处于"
+
+            trend_text += f"{pizza_index_desc[current_defcon_level]}"
+            resp_text  += trend_text
+
+
+        if defcon_level == -1:
             current_beijing_time = datetime.now(ZoneInfo("Asia/Shanghai")).isoformat()
 
             defcon_at_time = resp.get("defcon_details", {}).get("at_time", current_beijing_time)
             defcon_at_time = datetime.fromisoformat(defcon_at_time)
             defcon_at_time = defcon_at_time.astimezone(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S")
 
-            resp_text += f"*更新于北京时间 {defcon_at_time}*"
+            resp_text += f"\n*更新于北京时间 {defcon_at_time}*"
 
-        resp_text += "\n*lower index means higher risk*"
+
         resp_text = markdownify(resp_text)
 
 
