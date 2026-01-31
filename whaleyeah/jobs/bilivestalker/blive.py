@@ -20,6 +20,7 @@ client = httpx.AsyncClient(
     timeout=5,
 )
 
+# usernames = {}
 live_info = {}
 _blive_notify_chat = []
 
@@ -32,19 +33,27 @@ def get_handler(config: dict):
     return callback
 
 async def callback(ctx: CallbackContext):
+    # global usernames
+
     for k in live_info:
         if await _check_live(k):
+            room_info = live_info[k]
+
+            # if room_info["uid"] not in usernames:
+            #     resp = (await client.get(f"https://api.bilibili.com/x/web-interface/card?mid={room_info['uid']}")).json()
+
             notify_list = []
             for chat_id in _blive_notify_chat:
                 notify_list.append(ctx.bot.send_message(
                     chat_id=chat_id,
-                    text=f"开始直播啦！https://live.bilibili.com/{k}"
+                    text=f"有人开始直播啦！\n{room_info['title']}：https://live.bilibili.com/{k}"
                 ))
             await asyncio.gather(*notify_list)
     pass
 
 async def _check_live(room_id: int) -> bool:
-    resp = (await client.get(f"https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo?room_id={room_id}&protocol=0,1&format=0,1,2&codec=0,1,2&qn=0&platform=web&ptype=8&dolby=5&panorama=1")).json()
+    # resp = (await client.get(f"https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo?room_id={room_id}&protocol=0,1&format=0,1,2&codec=0,1,2&qn=0&platform=web&ptype=8&dolby=5&panorama=1")).json()
+    resp = (await client.get(f"https://api.live.bilibili.com/room/v1/Room/get_info?room_id={room_id}")).json()
     logger.debug(resp)
 
     if resp["code"]!=0 or not("data" in resp and "live_status" in resp["data"]):
