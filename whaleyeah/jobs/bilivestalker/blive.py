@@ -57,7 +57,7 @@ async def _check_live(room_id: int) -> bool:
     logger.debug(resp)
 
     if resp["code"]!=0 or not("data" in resp and "live_status" in resp["data"]):
-        logger.warning(f"failed to get live info for {room_id}: {resp["message"]}")
+        logger.warning(f"failed to get live info for {room_id}: {resp['message']}")
     else:
         global live_info
         last_status = live_info[room_id]
