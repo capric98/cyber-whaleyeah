@@ -250,17 +250,24 @@ class GeminiBot:
                                         resp_text += f"\n{part_attr_value}\n"
 
                         current_time = time.time()
-                        if current_time - last_draft_time > 1:
+                        if current_time - last_draft_time >= 0.2:
                             last_draft_time = current_time
-                            temp_text = resp_text
+                            temp_text = resp_text.strip()
+                            if not temp_text:
+                                continue
+
                             if temp_text.count("```") % 2 != 0:
                                 temp_text += "\n```"
 
                             try:
+                                md_text = markdownify(temp_text)
+                                if not md_text:
+                                    md_text = temp_text
+
                                 await bot.send_message_draft(
                                     chat_id=chat_id,
                                     draft_id=draft_id,
-                                    text=markdownify(temp_text),
+                                    text=md_text,
                                     parse_mode="MarkdownV2",
                                     message_thread_id=thread_id
                                 )
@@ -273,7 +280,9 @@ class GeminiBot:
                                         message_thread_id=thread_id
                                     )
                                 except Exception as e:
-                                    logger.warning(f"failed to send draft: {e}")
+                                    # Ignore specific Telegram API errors that are normal for some chat types
+                                    if "Textdraft_peer_invalid" not in str(e):
+                                        logger.warning(f"failed to send draft: {e}")
 
                 except Exception as e:
                     error_str = remove_credentials(f"{e}", bot.token.split(":"))
