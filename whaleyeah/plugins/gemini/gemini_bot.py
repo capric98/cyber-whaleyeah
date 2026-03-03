@@ -219,7 +219,7 @@ class GeminiBot:
 
                 bot = update.get_bot()
                 chat_id = reply_target.chat_id
-                draft_id = f"draft_{update.update_id}"
+                draft_id = update.update_id
                 thread_id = getattr(reply_target, "message_thread_id", None)
 
                 msg = None
@@ -280,8 +280,8 @@ class GeminiBot:
                                         message_thread_id=thread_id
                                     )
                                 except Exception as e:
-                                    # Ignore specific Telegram API errors that are normal for some chat types
-                                    if "Textdraft_peer_invalid" not in str(e):
+                                    # Ignore specific Telegram API errors that are normal for some chat types or high freq updates
+                                    if not any(err in str(e) for err in ("Textdraft_peer_invalid", "Random_id_invalid")):
                                         logger.warning(f"failed to send draft: {e}")
 
                 except Exception as e:
