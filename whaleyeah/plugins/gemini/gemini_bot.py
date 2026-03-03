@@ -226,6 +226,7 @@ class GeminiBot:
                 resp_text: str = ""
                 resp_image: genai_types.Image | None = None
                 last_draft_time = 0
+                last_typing_time = time.time()
 
                 try:
                     stream = await gemini.client.aio.models.generate_content_stream(
@@ -250,8 +251,14 @@ class GeminiBot:
                                         resp_text += f"\n{part_attr_value}\n"
 
                         current_time = time.time()
+
                         if current_time - last_draft_time >= 0.2:
                             last_draft_time = current_time
+
+                            if current_time - last_typing_time > 4.5:
+                                last_typing_time = current_time
+                                asyncio.create_task(reply_target.reply_chat_action("typing"))
+
                             temp_text = resp_text.strip()
                             if not temp_text:
                                 continue
