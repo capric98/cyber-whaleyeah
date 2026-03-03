@@ -1,5 +1,6 @@
 import logging
 import mimetypes
+import time
 
 import asyncio
 import httpx
@@ -74,28 +75,6 @@ class GeminiBot:
             self.mem_queue.append(id)
 
         self.memory[id] = contents
-
-
-    async def generate_content(self, contents) -> genai_types.GenerateContentResponse | Exception:
-
-        trial_count = 0
-        response = Exception("failed to execute generate_content")
-
-        while trial_count < 3:
-            try:
-                response = await self.client.aio.models.generate_content(
-                    model=self.model,
-                    contents=contents,
-                    config=self.generate_config,
-                )
-                return response
-            except Exception as e:
-                response = e
-                logger.error(f"Error generating content: {e}")
-                trial_count += 1
-                await asyncio.sleep(trial_count)
-
-        return response
 
 
     def get_callback(self) -> CommandHandler:
@@ -236,44 +215,80 @@ class GeminiBot:
             if contents:
                 logger.debug(contents)
 
-                async def reply_typing_wrapper():
-                    await reply_target.reply_chat_action("typing")
+                await reply_target.reply_chat_action("typing")
 
-                await reply_typing_wrapper()
+                bot = update.get_bot()
+                chat_id = reply_target.chat_id
+                draft_id = f"draft_{update.update_id}"
+                thread_id = getattr(reply_target, "message_thread_id", None)
+
+                msg = None
+                resp_text: str = ""
+                resp_image: genai_types.Image | None = None
+                last_draft_time = 0
 
                 try:
+                    stream = await gemini.client.aio.models.generate_content_stream(
+                        model=gemini.model,
+                        contents=contents,
+                        config=gemini.generate_config,
+                    )
 
-                    resp: genai_types.GenerateContentResponse = await tg_typing_manager(
-                        gemini.generate_content(contents),
-                        reply_typing_wrapper,
-                        interval_seconds = 5,
-                    ) # type: ignore
+                    async for chunk in stream:
+                        if not chunk.candidates:
+                            continue
 
-                    if isinstance(resp, Exception):
-                        error_str = remove_credentials(f"{resp}", update.get_bot().token.split(":"))
-                        await reply_target.reply_text("生成内容时出错:\n" + error_str)
-                        return
-                    else: logger.debug(resp)
+                        for part in chunk.candidates[0].content.parts:
+                            if part.inline_data is not None:
+                                resp_image = part.as_image()
+                            for part_attr_name in ["text", "executable_code", "code_execution_result"]:
+                                part_attr_value = getattr(part, part_attr_name, None)
+                                if part_attr_value is not None:
+                                    if part_attr_name == "text":
+                                        resp_text += f"{part_attr_value}"
+                                    else:
+                                        resp_text += f"\n{part_attr_value}\n"
 
+                        current_time = time.time()
+                        if current_time - last_draft_time > 1:
+                            last_draft_time = current_time
+                            temp_text = resp_text
+                            if temp_text.count("```") % 2 != 0:
+                                temp_text += "\n```"
 
-                    msg = None
-                    resp_text: str = ""
-                    resp_image: genai_types.Image | None = None
+                            try:
+                                await bot.send_message_draft(
+                                    chat_id=chat_id,
+                                    draft_id=draft_id,
+                                    text=markdownify(temp_text),
+                                    parse_mode="MarkdownV2",
+                                    message_thread_id=thread_id
+                                )
+                            except Exception:
+                                try:
+                                    await bot.send_message_draft(
+                                        chat_id=chat_id,
+                                        draft_id=draft_id,
+                                        text=temp_text,
+                                        message_thread_id=thread_id
+                                    )
+                                except Exception as e:
+                                    logger.warning(f"failed to send draft: {e}")
 
-                    for part in resp.candidates[0].content.parts: # type: ignore
-                        part: genai_types.Part = part
+                except Exception as e:
+                    error_str = remove_credentials(f"{e}", bot.token.split(":"))
+                    resp_text += f"\n\n❌ 生成内容时出错:\n{error_str}"
+                    try:
+                        await bot.send_message_draft(
+                            chat_id=chat_id,
+                            draft_id=draft_id,
+                            text=resp_text,
+                            message_thread_id=thread_id
+                        )
+                    except Exception:
+                        pass
 
-                        if part.inline_data is not None:
-                            # Currently only images are supported as inline_data:
-                            # https://github.com/googleapis/python-genai/blob/5b50adce2a76cb77bef067bc0a624d111d39c2dc/google/genai/types.py#L1432
-                            resp_image = part.as_image()
-
-                        for part_attr_name in ["text", "executable_code", "code_execution_result"]:
-                            part_attr_value = getattr(part, part_attr_name, None)
-                            if part_attr_value is not None:
-                                resp_text += f"{part_attr_value}\n"
-
-
+                try:
                     # Model may response an image only.
                     if resp_text:
                         # Covert to markdown, if failed or too long, send a pastebin link instead.
@@ -289,7 +304,21 @@ class GeminiBot:
                             logger.info(f"too long response, upload to pastebin: {pb_url}")
                             msg = await reply_target.reply_text(pb_url)
                         else:
-                            msg = await reply_target.reply_markdown_v2(markdown_resp)
+                            try:
+                                msg = await reply_target.reply_markdown_v2(markdown_resp)
+                            except Exception:
+                                msg = await reply_target.reply_text(resp_text)
+
+                        # Clear draft
+                        try:
+                            await bot.send_message_draft(
+                                chat_id=chat_id,
+                                draft_id=draft_id,
+                                text="",
+                                message_thread_id=thread_id
+                            )
+                        except Exception:
+                            pass
 
                     # If there's an image, send it as well.
                     if resp_image:
@@ -297,7 +326,7 @@ class GeminiBot:
                         msg = msg if msg else imsg # prefer text message as msg
 
                     # If reply successful, remember the conversation.
-                    if msg:
+                    if msg and resp_text:
                         contents.append(genai_types.ModelContent(resp_text))
                         gemini.remember(f"msg {msg.id} in chat {msg.chat_id}", contents=contents)
 
