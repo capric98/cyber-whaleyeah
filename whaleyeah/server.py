@@ -7,7 +7,8 @@ from importlib import import_module
 from telegram import Update
 from telegram.ext import Application, ContextTypes
 from telegram.ext import CommandHandler
-from telegramify_markdown import markdownify, customize
+from telegramify_markdown import markdownify
+from telegramify_markdown.config import get_runtime_config
 
 from .iwaku import iwaku_history_handler, iwaku_inline_handler, iwaku_locate_handler, iwaku_plugins_copy
 from .database import init_database
@@ -42,13 +43,16 @@ def serve_config(config: PathLike) -> None:
 
 
     md_config = config.get("markdown_customize", {})
-    md_render_config = customize.get_runtime_config()
+
+    md_render_config = get_runtime_config()
     md_render_config.cite_expandable = md_config.get("cite_expandable", md_render_config.cite_expandable)
-    md_render_config.unescape_html = md_config.get("unescape_html", md_render_config.unescape_html)
-    md_render_config.markdown_symbol.head_level_1 = md_config.get("head_level_1", md_render_config.markdown_symbol.head_level_1)
-    md_render_config.markdown_symbol.head_level_2 = md_config.get("head_level_2", md_render_config.markdown_symbol.head_level_2)
-    md_render_config.markdown_symbol.head_level_3 = md_config.get("head_level_3", md_render_config.markdown_symbol.head_level_3)
-    md_render_config.markdown_symbol.head_level_4 = md_config.get("head_level_4", md_render_config.markdown_symbol.head_level_4)
+    if hasattr(md_render_config, "unescape_html"):
+        md_render_config.unescape_html = md_config.get("unescape_html", md_render_config.unescape_html)
+
+    md_render_config.markdown_symbol.heading_level_1 = md_config.get("heading_level_1", md_config.get("head_level_1", md_render_config.markdown_symbol.heading_level_1))
+    md_render_config.markdown_symbol.heading_level_2 = md_config.get("heading_level_2", md_config.get("head_level_2", md_render_config.markdown_symbol.heading_level_2))
+    md_render_config.markdown_symbol.heading_level_3 = md_config.get("heading_level_3", md_config.get("head_level_3", md_render_config.markdown_symbol.heading_level_3))
+    md_render_config.markdown_symbol.heading_level_4 = md_config.get("heading_level_4", md_config.get("head_level_4", md_render_config.markdown_symbol.heading_level_4))
 
 
     init_database(config["database"])
