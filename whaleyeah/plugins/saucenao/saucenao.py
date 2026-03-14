@@ -72,7 +72,7 @@ async def saucenao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
         if pic:
             f = await pic.get_file()
-            resp = await asyncio.to_thread(sauce.from_url, f"{f.file_path}")
+            resp = await sauce.from_url(f"{f.file_path}")
             if resp.results:
                 await target_msg.reply_markdown_v2(_reply_saucenao_results(resp.results), disable_web_page_preview=True)
             else:

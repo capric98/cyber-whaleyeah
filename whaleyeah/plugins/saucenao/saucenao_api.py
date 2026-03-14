@@ -1,7 +1,7 @@
 from typing import Optional, BinaryIO
 
 import enum
-import requests
+import httpx
 
 
 _TIMEOUT_ = 5
@@ -236,16 +236,17 @@ class SauceNao:
         params['output_type'] = _OutputType.JSON
         self.params = params
 
-    def from_file(self, file: BinaryIO) -> SauceResponse:
-        return self._search(self.params, {'file': file})
+    async def from_file(self, file: BinaryIO) -> SauceResponse:
+        return await self._search(self.params, {'file': file})
 
-    def from_url(self, url: str) -> SauceResponse:
+    async def from_url(self, url: str) -> SauceResponse:
         params = self.params.copy()
         params['url'] = url
-        return self._search(params)
+        return await self._search(params)
 
-    def _search(self, params, files=None):
-        resp = requests.post(self.SAUCENAO_URL, params=params, files=files, timeout=_TIMEOUT_)
+    async def _search(self, params, files=None):
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(self.SAUCENAO_URL, params=params, files=files, timeout=_TIMEOUT_)
         status_code = resp.status_code
 
         if status_code == 200:
