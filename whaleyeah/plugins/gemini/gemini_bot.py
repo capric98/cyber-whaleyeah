@@ -15,7 +15,7 @@ from telegramify_markdown import markdownify
 from humanfriendly import format_size, parse_size
 from inflection import camelize
 
-from whaleyeah.plugins.openai_compatible import xgg_pb_link, tg_typing_manager, remove_credentials
+from whaleyeah.plugins.openai_compatible import xgg_pb_link, remove_credentials
 
 
 logger = logging.getLogger(__name__)
@@ -252,7 +252,7 @@ class GeminiBot:
 
                         current_time = time.time()
 
-                        if current_time - last_draft_time >= 0.2:
+                        if current_time - last_draft_time >= 0.5:
                             last_draft_time = current_time
 
                             if current_time - last_typing_time > 4.5:
