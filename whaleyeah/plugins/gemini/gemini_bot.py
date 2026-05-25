@@ -236,7 +236,7 @@ class GeminiBot:
                     )
 
                     async for chunk in stream:
-                        if not chunk.candidates:
+                        if not chunk.candidates or not chunk.candidates[0].content or not chunk.candidates[0].content.parts:
                             continue
 
                         for part in chunk.candidates[0].content.parts:
@@ -343,7 +343,12 @@ class GeminiBot:
 
                     # If reply successful, remember the conversation.
                     if msg and resp_text:
-                        contents.append(genai_types.ModelContent(resp_text))
+                        contents.append(
+                            genai_types.Content(
+                                role="model",
+                                parts=[genai_types.Part.from_text(text=resp_text)],
+                            )
+                        )
                         gemini.remember(f"msg {msg.id} in chat {msg.chat_id}", contents=contents)
 
                 except Exception as e:
