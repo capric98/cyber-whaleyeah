@@ -245,10 +245,15 @@ class GeminiBot:
                             for part_attr_name in ["text", "executable_code", "code_execution_result"]:
                                 part_attr_value = getattr(part, part_attr_name, None)
                                 if part_attr_value is not None:
-                                    if part_attr_name == "text":
-                                        resp_text += f"{part_attr_value}"
-                                    else:
-                                        resp_text += f"\n{part_attr_value}\n"
+                                    match part_attr_name:
+                                        case "text":
+                                            resp_text += f"{part_attr_value}"
+                                        case "executable_code":
+                                            resp_text += f"\n🛠️代码执行：\n```\n{part_attr_value.code}\n```\n"
+                                        case "code_execution_result":
+                                            resp_text += f"\n💻执行结果：\n{part_attr_value.output}\n"
+                                        case _:
+                                            resp_text += f"\n{part_attr_value}\n"
 
                         current_time = time.time()
 
