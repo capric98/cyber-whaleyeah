@@ -96,6 +96,10 @@ def get_handler(config: dict):
 
         if current_defcon_level!=defcon_level:
             try:
+
+                # no need to print first run
+                if defcon_level == -1: return
+
                 notify_job_list = []
                 for chat_id in pizza_index_notify_chats:
                     notify_job_list.append(ctx.bot.send_message(
