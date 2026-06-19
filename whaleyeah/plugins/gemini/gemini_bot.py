@@ -11,11 +11,11 @@ from telegram.ext import ContextTypes, CommandHandler
 from google import genai
 from google.genai import types as genai_types
 
-from telegramify_markdown import markdownify
 from humanfriendly import format_size, parse_size
 from inflection import camelize
 
 from whaleyeah.plugins.openai_compatible import xgg_pb_link, remove_credentials
+from whaleyeah.rich_message import reply_rich_message, send_rich_message_draft
 
 
 logger = logging.getLogger(__name__)
@@ -268,43 +268,29 @@ class GeminiBot:
                             if not temp_text:
                                 continue
 
-                            if temp_text.count("```") % 2 != 0:
-                                temp_text += "\n```"
-
                             try:
-                                md_text = markdownify(temp_text)
-                                if not md_text:
-                                    md_text = temp_text
-
-                                await bot.send_message_draft(
+                                await send_rich_message_draft(
+                                    bot,
                                     chat_id=chat_id,
                                     draft_id=draft_id,
-                                    text=md_text,
-                                    parse_mode="MarkdownV2",
-                                    message_thread_id=thread_id
+                                    markdown=temp_text,
+                                    message_thread_id=thread_id,
                                 )
-                            except Exception:
-                                try:
-                                    await bot.send_message_draft(
-                                        chat_id=chat_id,
-                                        draft_id=draft_id,
-                                        text=temp_text,
-                                        message_thread_id=thread_id
-                                    )
-                                except Exception as e:
-                                    # Ignore specific Telegram API errors that are normal for some chat types or high freq updates
-                                    if not any(err in str(e) for err in ("Textdraft_peer_invalid", "Random_id_invalid")):
-                                        logger.warning(f"failed to send draft: {e}")
+                            except Exception as e:
+                                # Some chat types do not accept streamed drafts; keep generation running.
+                                if not any(err in str(e) for err in ("Textdraft_peer_invalid", "Random_id_invalid")):
+                                    logger.warning(f"failed to send rich draft: {e}")
 
                 except Exception as e:
                     error_str = remove_credentials(f"{e}", bot.token.split(":"))
                     resp_text += f"\n\n❌ 生成内容时出错:\n{error_str}"
                     try:
-                        await bot.send_message_draft(
+                        await send_rich_message_draft(
+                            bot,
                             chat_id=chat_id,
                             draft_id=draft_id,
-                            text=resp_text,
-                            message_thread_id=thread_id
+                            markdown=resp_text,
+                            message_thread_id=thread_id,
                         )
                     except Exception:
                         pass
@@ -312,31 +298,25 @@ class GeminiBot:
                 try:
                     # Model may response an image only.
                     if resp_text:
-                        # Covert to markdown, if failed or too long, send a pastebin link instead.
                         try:
-                            markdown_resp = markdownify(resp_text)
+                            msg = await reply_rich_message(reply_target, markdown=resp_text)
                         except Exception as e:
-                            logger.error(f"failed to markdownify: {e}")
-                            markdown_resp = resp_text + " " * max(5000 - len(resp_text), 100)
-
-                        # Send the reply.
-                        if len(markdown_resp) > 4000:
-                            pb_url = await xgg_pb_link(text=resp_text, title=effective_text)
-                            logger.info(f"too long response, upload to pastebin: {pb_url}")
-                            msg = await reply_target.reply_text(pb_url)
-                        else:
-                            try:
-                                msg = await reply_target.reply_markdown_v2(markdown_resp)
-                            except Exception:
+                            logger.warning(f"failed to send rich message: {e}")
+                            if len(resp_text) > 4000:
+                                pb_url = await xgg_pb_link(text=resp_text, title=effective_text)
+                                logger.info(f"rich message failed, upload to pastebin: {pb_url}")
+                                msg = await reply_target.reply_text(pb_url)
+                            else:
                                 msg = await reply_target.reply_text(resp_text)
 
                         # Clear draft
                         try:
-                            await bot.send_message_draft(
+                            await send_rich_message_draft(
+                                bot,
                                 chat_id=chat_id,
                                 draft_id=draft_id,
-                                text="",
-                                message_thread_id=thread_id
+                                markdown="",
+                                message_thread_id=thread_id,
                             )
                         except Exception:
                             pass
