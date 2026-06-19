@@ -15,7 +15,7 @@ from humanfriendly import format_size, parse_size
 from inflection import camelize
 
 from whaleyeah.plugins.openai_compatible import xgg_pb_link, remove_credentials
-from whaleyeah.rich_message import reply_rich_message, send_rich_message_draft
+from whaleyeah.rich_message import RICH_MESSAGE_MAX_LENGTH, reply_rich_message, send_rich_message_draft
 
 
 logger = logging.getLogger(__name__)
@@ -273,7 +273,7 @@ class GeminiBot:
                                     bot,
                                     chat_id=chat_id,
                                     draft_id=draft_id,
-                                    markdown=temp_text,
+                                    markdown=temp_text[:RICH_MESSAGE_MAX_LENGTH],
                                     message_thread_id=thread_id,
                                 )
                             except Exception as e:
@@ -289,7 +289,7 @@ class GeminiBot:
                             bot,
                             chat_id=chat_id,
                             draft_id=draft_id,
-                            markdown=resp_text,
+                            markdown=resp_text[:RICH_MESSAGE_MAX_LENGTH],
                             message_thread_id=thread_id,
                         )
                     except Exception:
@@ -298,15 +298,15 @@ class GeminiBot:
                 try:
                     # Model may response an image only.
                     if resp_text:
-                        try:
-                            msg = await reply_rich_message(reply_target, markdown=resp_text)
-                        except Exception as e:
-                            logger.warning(f"failed to send rich message: {e}")
-                            if len(resp_text) > 4000:
-                                pb_url = await xgg_pb_link(text=resp_text, title=effective_text)
-                                logger.info(f"rich message failed, upload to pastebin: {pb_url}")
-                                msg = await reply_target.reply_text(pb_url)
-                            else:
+                        if len(resp_text) > RICH_MESSAGE_MAX_LENGTH:
+                            pb_url = await xgg_pb_link(text=resp_text, title=effective_text)
+                            logger.info(f"too long rich response, upload to pastebin: {pb_url}")
+                            msg = await reply_target.reply_text(pb_url)
+                        else:
+                            try:
+                                msg = await reply_rich_message(reply_target, markdown=resp_text)
+                            except Exception as e:
+                                logger.warning(f"failed to send rich message: {e}")
                                 msg = await reply_target.reply_text(resp_text)
 
                         # Clear draft

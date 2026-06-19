@@ -7,6 +7,7 @@ from telegram import Bot, Message, ReplyParameters
 
 
 InputRichMessage = dict[str, Any]
+RICH_MESSAGE_MAX_LENGTH = 32768
 
 
 _FENCED_CODE_RE = re.compile(r"(^|\n)(`{3,}|~{3,})")
