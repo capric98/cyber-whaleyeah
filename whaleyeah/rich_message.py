@@ -13,6 +13,61 @@ RICH_MESSAGE_MAX_LENGTH = 32768
 _FENCED_CODE_RE = re.compile(r"(^|\n)(`{3,}|~{3,})")
 _INLINE_CODE_RE = re.compile(r"(?<!`)`(?!`)")
 
+def _rich_text_to_plain(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "".join(_rich_text_to_plain(item) for item in value)
+    if isinstance(value, dict):
+        parts = []
+        for key in ("text", "alternative_text", "expression", "label"):
+            if key in value:
+                parts.append(_rich_text_to_plain(value[key]))
+        return "".join(parts)
+    return ""
+
+
+def _rich_block_to_plain(block: Any) -> str:
+    if isinstance(block, str):
+        return block
+    if isinstance(block, list):
+        return "\n".join(filter(None, (_rich_block_to_plain(item) for item in block)))
+    if not isinstance(block, dict):
+        return ""
+
+    parts = []
+    if "text" in block:
+        parts.append(_rich_text_to_plain(block["text"]))
+    if "expression" in block:
+        parts.append(str(block["expression"]))
+    if "blocks" in block:
+        parts.append(_rich_block_to_plain(block["blocks"]))
+    if "items" in block:
+        parts.extend(_rich_block_to_plain(item.get("blocks", [])) for item in block["items"] if isinstance(item, dict))
+    if "cells" in block:
+        for row in block["cells"]:
+            parts.append("\t".join(_rich_text_to_plain(cell.get("text", "")) for cell in row if isinstance(cell, dict)))
+    if "caption" in block:
+        parts.append(_rich_text_to_plain(block["caption"]))
+
+    return "\n".join(part for part in parts if part)
+
+
+def extract_message_text(message: Message) -> str:
+    text = (message.text or message.caption or "").strip()
+    if text:
+        return text
+
+    rich_message = getattr(message, "rich_message", None)
+    if rich_message is None:
+        rich_message = getattr(message, "api_kwargs", {}).get("rich_message")
+    if hasattr(rich_message, "to_dict"):
+        rich_message = rich_message.to_dict()
+    if isinstance(rich_message, dict):
+        return _rich_block_to_plain(rich_message.get("blocks", [])).strip()
+
+    return ""
+
 
 def _is_odd(value: int) -> bool:
     return value % 2 == 1

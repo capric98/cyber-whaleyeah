@@ -15,10 +15,11 @@ from humanfriendly import format_size, parse_size
 from inflection import camelize
 
 from whaleyeah.plugins.openai_compatible import xgg_pb_link, remove_credentials
-from whaleyeah.rich_message import RICH_MESSAGE_MAX_LENGTH, reply_rich_message, send_rich_message_draft
+from whaleyeah.rich_message import RICH_MESSAGE_MAX_LENGTH, extract_message_text, reply_rich_message, send_rich_message_draft
 
 
 logger = logging.getLogger(__name__)
+
 
 
 async def get_url_bytes(url: str, timeout: float=10.0) -> bytes:
@@ -133,15 +134,14 @@ class GeminiBot:
                 reply_target = msg.reply_to_message
                 memory_id    = f"msg {reply_target.id} in chat {reply_target.chat_id}"
 
-                try:
-                    if not reply_target.from_user.is_bot: # type: ignore
-                        await reply_target.reply_text("这似乎不是bot发送的AI生成消息🤨！无法继续对话")
-                        return
-                except:
-                    return
-
                 if memory_id in gemini.memory:
                     contents.extend(gemini.memory[memory_id])
+                else:
+                    replied_text = extract_message_text(reply_target)
+                    if replied_text:
+                        contents.append(genai_types.UserContent(
+                            parts=[genai_types.Part.from_text(text=replied_text)]
+                        ))
 
 
             if msg.caption:

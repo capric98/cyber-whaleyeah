@@ -15,6 +15,7 @@ from telegram.ext import CommandHandler, ContextTypes
 
 from whaleyeah.rich_message import (
     RICH_MESSAGE_MAX_LENGTH,
+    extract_message_text,
     reply_rich_message,
     send_rich_message_draft,
 )
@@ -113,6 +114,7 @@ def _strip_command_text(text: str, command: str, bot_name: str) -> str:
     return text.removeprefix(f"/{command}").removeprefix(bot_name).strip()
 
 
+
 def _guess_api_type(config: dict[str, Any]) -> MessageFormat:
     configured = config.get("api_type", config.get("message_format"))
     if configured:
@@ -206,8 +208,11 @@ class OpenAICompatibleBot:
         message: dict[str, Any],
         memory_message: dict[str, Any],
         id: str,
+        fallback_history: list[dict[str, Any]] | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         history = self._history(id)
+        if not history and fallback_history:
+            history = list(fallback_history)
         return [*history, message], [*history, memory_message]
 
     async def _stream_response_text(self, request_messages: list[dict[str, Any]]) -> AsyncIterator[str]:
@@ -362,15 +367,15 @@ class OpenAICompatibleBot:
 
         reply_target = msg
         memory_id = ""
+        fallback_history: list[dict[str, Any]] = []
         if msg.reply_to_message:
             reply_target = msg.reply_to_message
             memory_id = f"{reply_target.chat_id}<-{reply_target.id}"
-            try:
-                if not reply_target.from_user or not reply_target.from_user.is_bot:
-                    await reply_target.reply_text("这似乎不是bot发送的AI生成消息🤨！无法继续对话")
-                    return
-            except Exception:
-                return
+            if memory_id not in self.memory:
+                replied_text = extract_message_text(reply_target)
+                if replied_text:
+                    _, fallback_memory_message = self._build_text_message(replied_text)
+                    fallback_history.append(fallback_memory_message)
 
         message_tuple = await self._message_from_update(update, reply_target, command)
         if not message_tuple:
@@ -389,7 +394,7 @@ class OpenAICompatibleBot:
         last_draft_time = 0.0
         last_typing_time = time.time()
 
-        request_messages, memory_messages = self._request_messages(api_message, memory_message, memory_id)
+        request_messages, memory_messages = self._request_messages(api_message, memory_message, memory_id, fallback_history)
 
         try:
             async for delta in self._stream_response_text(request_messages):
