@@ -1,32 +1,24 @@
 import logging
-import mimetypes
 import time
 
 import asyncio
-import httpx
 
-from telegram import Update
+from telegram import Update, Message
 from telegram.ext import ContextTypes, CommandHandler
 
 from google import genai
 from google.genai import types as genai_types
 
-from humanfriendly import format_size, parse_size
+from humanfriendly import parse_size
 from inflection import camelize
 
 from whaleyeah.plugins.openai_compatible import xgg_pb_link, remove_credentials
-from whaleyeah.rich_message import RICH_MESSAGE_MAX_LENGTH, extract_message_text, reply_rich_message, send_rich_message_draft
+from whaleyeah.plugins.media_extractor import extract_media, AttachmentTooLargeError, AttachmentDownloadError
+from whaleyeah.rich_message import RICH_MESSAGE_MAX_LENGTH, reply_rich_message, send_rich_message_draft
 
 
 logger = logging.getLogger(__name__)
 
-
-
-async def get_url_bytes(url: str, timeout: float=10.0) -> bytes:
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, follow_redirects=True, timeout=timeout)
-        response.raise_for_status()
-        return response.content
 
 
 class GeminiBot:
@@ -78,6 +70,43 @@ class GeminiBot:
         self.memory[id] = contents
 
 
+    async def _build_gemini_content(
+        self,
+        message: Message,
+        reply_target_for_errors: Message,
+        is_command: bool = False,
+        command: str = "",
+    ) -> genai_types.UserContent | None:
+        try:
+            extracted = await extract_media(
+                message=message,
+                max_attach_size=self.max_attach_size,
+                allowed_types={"photo", "audio", "document"},
+                is_command=is_command,
+                command=command,
+            )
+        except AttachmentTooLargeError as e:
+            await reply_target_for_errors.reply_text(str(e))
+            return None
+        except AttachmentDownloadError as e:
+            error_str = f"failed to download attachment: {e}"
+            logger.warning(error_str)
+            await reply_target_for_errors.reply_text(remove_credentials(error_str, message.get_bot().token.split(":")))
+            return None
+
+        parts = []
+        if extracted.text:
+            parts.append(genai_types.Part.from_text(text=extracted.text))
+
+        for att in extracted.attachments:
+            parts.append(genai_types.Part.from_bytes(data=att.bytes, mime_type=att.mime_type))
+
+        if not parts:
+            return None
+
+        return genai_types.UserContent(parts=parts)
+
+
     def get_callback(self) -> CommandHandler:
 
 
@@ -124,92 +153,35 @@ class GeminiBot:
                 if not flag: return
 
 
-            contents       = []
-            reply_target   = msg
-            memory_id      = ""
-            effective_text = ""
+            reply_target   = msg.reply_to_message if msg.reply_to_message else msg
 
+            if msg.caption:
+                effective_text = msg.caption.removeprefix(f"/{command}").removeprefix(msg.get_bot().name).strip()
+            elif msg.text:
+                effective_text = msg.text.removeprefix(f"/{command}").removeprefix(msg.get_bot().name).strip()
+            else:
+                effective_text = ""
+
+            if not effective_text:
+                await reply_target.reply_text(f"食用方式：/{command}@{update.get_bot().name.removeprefix('@')} 你好")
+                return
+
+            contents       = []
+            memory_id      = ""
 
             if msg.reply_to_message:
-                reply_target = msg.reply_to_message
                 memory_id    = f"msg {reply_target.id} in chat {reply_target.chat_id}"
 
                 if memory_id in gemini.memory:
                     contents.extend(gemini.memory[memory_id])
                 else:
-                    replied_text = extract_message_text(reply_target)
-                    if replied_text:
-                        contents.append(genai_types.UserContent(
-                            parts=[genai_types.Part.from_text(text=replied_text)]
-                        ))
+                    replied_content = await gemini._build_gemini_content(reply_target, reply_target)
+                    if replied_content:
+                        contents.append(replied_content)
 
-
-            if msg.caption:
-                attachment_urls = []
-
-                if pic:=msg.photo:
-                    pic = list(pic)
-                    pic.sort(key=lambda v: v.width, reverse=True)
-                    pic = pic[0]
-                    pic_file = await pic.get_file()
-                    attachment_urls.append(pic_file.file_path)
-
-                for atype in ["audio", "document"]:
-                    attachment = getattr(msg, atype, None)
-                    if attachment:
-                        attachment_size = attachment.file_size
-                        if attachment_size and attachment_size > gemini.max_attach_size:
-                            await reply_target.reply_text(f"附件超出{format_size(gemini.max_attach_size, binary=True)}大小限制！")
-                            return
-
-                        try:
-                            afile = await attachment.get_file()
-                        except Exception as e:
-                            error_str = f"failed to get attachment file: {e}"
-                            logger.warning(error_str)
-                            await reply_target.reply_text(remove_credentials(error_str, update.get_bot().token.split(":")))
-                            return
-                        else:
-                            attachment_urls.append(afile.file_path)
-
-
-                effective_text = msg.caption.removeprefix(f"/{command}").removeprefix(msg.get_bot().name).strip()
-                if not effective_text:
-                    await reply_target.reply_text(f"食用方式：/{command}@{update.get_bot().name.removeprefix('@')} 你好")
-                    return
-
-
-                parts = [genai_types.Part.from_text(text=effective_text)]
-
-                for url in attachment_urls:
-                    logger.debug(f"gemini attachment mode: file url -> {url}")
-
-                    attachment_bytes = await get_url_bytes(url) # type: ignore
-                    content_type = mimetypes.guess_type(url)[0] # type: ignore
-                    content_type = content_type if content_type else "image/jpeg" # default to jpeg, let google handle it XD
-                    logger.debug(f"fetched attachment size: {len(attachment_bytes)} bytes, content_type: {content_type}")
-
-                    if len(attachment_bytes) > gemini.max_attach_size:
-                        await reply_target.reply_text(f"附件超出{format_size(gemini.max_attach_size, binary=True)}大小限制！")
-                        return
-
-                    parts.append(genai_types.Part.from_bytes(data=attachment_bytes, mime_type=content_type))
-
-
-                contents.append(genai_types.UserContent(parts = parts))
-
-
-            # if has msg.caption, msg.text is empty?
-            if msg.text:
-                logger.debug(f"gemini text mode: {msg.text}")
-                effective_text = msg.text.removeprefix(f"/{command}").removeprefix(msg.get_bot().name).strip()
-                if not effective_text:
-                    await reply_target.reply_text(f"食用方式：/{command}@{update.get_bot().name.removeprefix('@')} 你好")
-                    return
-
-                contents.append(genai_types.UserContent(
-                    parts = [genai_types.Part.from_text(text=effective_text)]
-                ))
+            current_content = await gemini._build_gemini_content(msg, reply_target, is_command=True, command=command)
+            if current_content:
+                contents.append(current_content)
 
 
             if contents:

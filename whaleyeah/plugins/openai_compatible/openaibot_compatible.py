@@ -8,30 +8,25 @@ from collections.abc import AsyncIterator
 from typing import Any, Literal
 
 import httpx
-from humanfriendly import format_size, parse_size
+
+from humanfriendly import parse_size
 from openai import AsyncOpenAI
 from telegram import Message, Update
 from telegram.ext import CommandHandler, ContextTypes
 
+from whaleyeah.plugins.media_extractor import extract_media, AttachmentTooLargeError, AttachmentDownloadError
 from whaleyeah.rich_message import (
     RICH_MESSAGE_MAX_LENGTH,
-    extract_message_text,
     reply_rich_message,
     send_rich_message_draft,
 )
+
 
 logger = logging.getLogger(__name__)
 
 _oai_bots: dict[str, "OpenAICompatibleBot"] = {}
 
 MessageFormat = Literal["chat", "responses"]
-
-
-async def get_url_bytes(url: str, timeout: float = 10.0) -> bytes:
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, follow_redirects=True, timeout=timeout)
-        response.raise_for_status()
-        return response.content
 
 
 def remove_credentials(content: str, credentials: list[str]) -> str:
@@ -140,7 +135,7 @@ class OpenAICompatibleBot:
         self.create_params = dict(config.get("create_params", {}))
         self.stream = bool(config.get("stream", True))
 
-        self.memory: dict[str, list[dict[str, Any]]] = {}
+        self.memory: dict[str, list[Any]] = {}
         self.mem_queue: list[None | str] = [None] * int(config.get("memory_size", 10))
 
         self.whitelist_chat_ids: list[int] = config.get("whitelist_chat", [])
@@ -159,7 +154,7 @@ class OpenAICompatibleBot:
             client_kwargs["base_url"] = self.endpoint
         self.client = AsyncOpenAI(**client_kwargs)
 
-    def remember(self, id: str, messages: list[dict[str, Any]]) -> None:
+    def remember(self, id: str, messages: list[Any]) -> None:
         if id not in self.memory:
             if victim_id := self.mem_queue.pop(0):
                 self.memory.pop(victim_id, None)
@@ -167,55 +162,101 @@ class OpenAICompatibleBot:
 
         self.memory[id] = messages
 
-    def _history(self, id: str) -> list[dict[str, Any]]:
+    def _history(self, id: str) -> list[Any]:
         return list(self.memory.get(id, []))
 
-    def _build_text_message(self, text: str) -> tuple[dict[str, Any], dict[str, Any]]:
-        if self.api_type == "responses":
-            message = {"role": "user", "content": [{"type": "input_text", "text": text}]}
-        else:
-            message = {"role": "user", "content": text}
-        return message, message
-
-    def _build_image_message(
+    async def _build_message_from_tg_message(
         self,
-        text: str,
-        image_data_url: str,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
-        if self.api_type == "responses":
-            message = {
-                "role": "user",
-                "content": [
-                    {"type": "input_text", "text": text},
-                    {"type": "input_image", "image_url": image_data_url},
-                ],
-            }
-            memory_message = {"role": "user", "content": [{"type": "input_text", "text": text}]}
-        else:
-            message = {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": text},
-                    {"type": "image_url", "image_url": {"url": image_data_url}},
-                ],
-            }
-            memory_message = {"role": "user", "content": text}
+        message: Message,
+        reply_target_for_errors: Message,
+        is_command: bool = False,
+        command: str = "",
+    ) -> dict[str, Any] | None:
+        # Pre-check vision availability if message contains image attachments
+        has_image = False
+        if message.photo:
+            has_image = True
+        elif message.document:
+            doc_type = message.document.mime_type or mimetypes.guess_type(message.document.file_name or "")[0]
+            if doc_type and doc_type.startswith("image/"):
+                has_image = True
 
-        return message, memory_message
+        if has_image:
+            if not self.enable_vision:
+                await reply_target_for_errors.reply_text(text="当前模型未启用图片输入，请改用文字提问。")
+                return None
+
+        # Determine allowed media types based on model support
+        allowed_types: set[str] = set()
+        if self.enable_vision:
+            allowed_types = {"photo", "document"}
+
+        try:
+            extracted = await extract_media(
+                message=message,
+                max_attach_size=self.max_attach_size,
+                allowed_types=allowed_types,
+                is_command=is_command,
+                command=command,
+            )
+        except AttachmentTooLargeError as e:
+            await reply_target_for_errors.reply_text(str(e))
+            return None
+        except AttachmentDownloadError as e:
+            error_str = f"failed to get attachment file: {e}"
+            logger.warning(error_str)
+            await reply_target_for_errors.reply_text(remove_credentials(error_str, message.get_bot().token.split(":")))
+            return None
+
+        # Check that we only extract images for document attachments
+        if extracted.attachments:
+            for att in extracted.attachments:
+                if att.type == "document" and not att.mime_type.startswith("image/"):
+                    await reply_target_for_errors.reply_text(text="尚不支持图片以外的文件哦😭")
+                    return None
+
+        # Build message dictionary based on api_type
+        # Since the bot only supports a single image at a time (from original code structure),
+        # we check if there's any image attachment and build accordingly.
+        image_att = next((att for att in extracted.attachments if att.mime_type.startswith("image/")), None)
+
+        if image_att:
+            encoded = base64.b64encode(image_att.bytes).decode("ascii")
+            image_data_url = f"data:{image_att.mime_type};base64,{encoded}"
+
+            if self.api_type == "responses":
+                content_list = []
+                if extracted.text:
+                    content_list.append({"type": "input_text", "text": extracted.text})
+                content_list.append({"type": "input_image", "image_url": image_data_url})
+                return {"role": "user", "content": content_list}
+            else:
+                content_list = []
+                if extracted.text:
+                    content_list.append({"type": "text", "text": extracted.text})
+                content_list.append({"type": "image_url", "image_url": {"url": image_data_url}})
+                return {"role": "user", "content": content_list}
+        else:
+            if extracted.text:
+                if self.api_type == "responses":
+                    return {"role": "user", "content": [{"type": "input_text", "text": extracted.text}]}
+                else:
+                    return {"role": "user", "content": extracted.text}
+            return None
 
     def _request_messages(
         self,
         message: dict[str, Any],
         memory_message: dict[str, Any],
         id: str,
-        fallback_history: list[dict[str, Any]] | None = None,
-    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        fallback_history: list[Any] | None = None,
+    ) -> tuple[list[Any], list[Any]]:
         history = self._history(id)
         if not history and fallback_history:
             history = list(fallback_history)
         return [*history, message], [*history, memory_message]
 
-    async def _stream_response_text(self, request_messages: list[dict[str, Any]]) -> AsyncIterator[str]:
+    async def _stream_response_text(self, request_messages: list[Any]) -> AsyncIterator[str]:
         create_params = dict(self.create_params)
         create_params.pop("stream", None)
 
@@ -230,7 +271,9 @@ class OpenAICompatibleBot:
                 async for event in stream:
                     event_type = getattr(event, "type", None)
                     if event_type == "response.output_text.delta":
-                        yield event.delta
+                        delta_val = getattr(event, "delta", None)
+                        if delta_val is not None:
+                            yield delta_val
                     elif event_type == "error":
                         raise RuntimeError(getattr(event, "message", "OpenAI streaming error"))
             else:
@@ -286,69 +329,6 @@ class OpenAICompatibleBot:
         self.whitelist_cache[sender.id] = allowed
         return allowed
 
-    async def _message_from_update(
-        self,
-        update: Update,
-        reply_target: Message,
-        command: str,
-    ) -> tuple[dict[str, Any], dict[str, Any], str] | None:
-        msg = update.effective_message
-        sender = update.effective_user
-        if not msg or not sender:
-            return None
-
-        if msg.caption:
-            effective_text = _strip_command_text(msg.caption, command, msg.get_bot().name)
-            if not effective_text:
-                await reply_target.reply_text(f"食用方式：/{command}@{update.get_bot().name.removeprefix('@')} 你好")
-                return None
-
-            attachment = None
-            content_type = None
-            if msg.photo:
-                photos = list(msg.photo)
-                photos.sort(key=lambda v: v.width, reverse=True)
-                attachment = photos[0]
-                content_type = "image/jpeg"
-            elif msg.document:
-                attachment = msg.document
-                content_type = attachment.mime_type or mimetypes.guess_type(attachment.file_name or "")[0]
-                if not content_type or not content_type.startswith("image/"):
-                    await reply_target.reply_text(text="尚不支持图片以外的文件哦😭")
-                    return None
-            else:
-                await reply_target.reply_text(text="尚不支持图片以外的文件哦😭")
-                return None
-
-            if not self.enable_vision:
-                await reply_target.reply_text(text="当前模型未启用图片输入，请改用文字提问。")
-                return None
-
-            if attachment.file_size and attachment.file_size > self.max_attach_size:
-                await reply_target.reply_text(f"附件超出{format_size(self.max_attach_size, binary=True)}大小限制！")
-                return None
-
-            tg_file = await attachment.get_file()
-            image_bytes = await get_url_bytes(tg_file.file_path)  # type: ignore[arg-type]
-            if len(image_bytes) > self.max_attach_size:
-                await reply_target.reply_text(f"附件超出{format_size(self.max_attach_size, binary=True)}大小限制！")
-                return None
-
-            encoded = base64.b64encode(image_bytes).decode("ascii")
-            image_data_url = f"data:{content_type or 'image/jpeg'};base64,{encoded}"
-            api_message, memory_message = self._build_image_message(effective_text, image_data_url)
-            return api_message, memory_message, effective_text
-
-        if msg.text:
-            effective_text = _strip_command_text(msg.text, command, msg.get_bot().name)
-            if not effective_text:
-                await reply_target.reply_text(f"食用方式：/{command} 你好")
-                return None
-            api_message, memory_message = self._build_text_message(effective_text)
-            return api_message, memory_message, effective_text
-
-        return None
-
     async def callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         msg = update.effective_message
         if not msg:
@@ -365,23 +345,31 @@ class OpenAICompatibleBot:
         if not await self._is_allowed(update):
             return
 
-        reply_target = msg
-        memory_id = ""
-        fallback_history: list[dict[str, Any]] = []
-        if msg.reply_to_message:
-            reply_target = msg.reply_to_message
-            memory_id = f"{reply_target.chat_id}<-{reply_target.id}"
-            if memory_id not in self.memory:
-                replied_text = extract_message_text(reply_target)
-                if replied_text:
-                    _, fallback_memory_message = self._build_text_message(replied_text)
-                    fallback_history.append(fallback_memory_message)
+        reply_target = msg.reply_to_message if msg.reply_to_message else msg
 
-        message_tuple = await self._message_from_update(update, reply_target, command)
-        if not message_tuple:
+        # Validate that command has text
+        source = msg.caption or msg.text
+        effective_text = _strip_command_text(source, command, msg.get_bot().name) if source else ""
+        if not effective_text:
+            if msg.caption:
+                await reply_target.reply_text(f"食用方式：/{command}@{update.get_bot().name.removeprefix('@')} 你好")
+            else:
+                await reply_target.reply_text(f"食用方式：/{command} 你好")
             return
 
-        api_message, memory_message, effective_text = message_tuple
+        memory_id = ""
+        fallback_history: list[Any] = []
+        if msg.reply_to_message:
+            memory_id = f"{reply_target.chat_id}<-{reply_target.id}"
+            if memory_id not in self.memory:
+                replied_msg = await self._build_message_from_tg_message(reply_target, reply_target)
+                if replied_msg:
+                    fallback_history.append(replied_msg)
+
+        api_message = await self._build_message_from_tg_message(msg, reply_target, is_command=True, command=command)
+        if not api_message:
+            return
+
         logger.debug(api_message)
 
         await reply_target.reply_chat_action("typing")
@@ -394,7 +382,7 @@ class OpenAICompatibleBot:
         last_draft_time = 0.0
         last_typing_time = time.time()
 
-        request_messages, memory_messages = self._request_messages(api_message, memory_message, memory_id, fallback_history)
+        request_messages, memory_messages = self._request_messages(api_message, api_message, memory_id, fallback_history)
 
         try:
             async for delta in self._stream_response_text(request_messages):
