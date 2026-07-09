@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+
 from typing import Any
 
 from telegram import Bot, Message, ReplyParameters
@@ -12,6 +13,7 @@ RICH_MESSAGE_MAX_LENGTH = 32768
 
 _FENCED_CODE_RE = re.compile(r"(^|\n)(`{3,}|~{3,})")
 _INLINE_CODE_RE = re.compile(r"(?<!`)`(?!`)")
+
 
 def _rich_text_to_plain(value: Any) -> str:
     if isinstance(value, str):
