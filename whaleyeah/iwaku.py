@@ -25,7 +25,32 @@ SEARCH_PAGE_SIZE = 10
 
 logger = logging.getLogger(__name__)
 plugins_from_server = {}
-_iwaku_uid_whitelist = {}
+IWAKU_PRIVILEGE_CACHE_TTL = 300
+_iwaku_uid_whitelist: dict[int, tuple[bool, float]] = {}
+
+
+async def _has_iwaku_privilege(bot, user_id: int) -> bool:
+    now = time.monotonic()
+    cached = _iwaku_uid_whitelist.get(user_id)
+    if cached is not None and now - cached[1] < IWAKU_PRIVILEGE_CACHE_TTL:
+        return cached[0]
+
+    try:
+        administrators = await bot.get_chat_administrators(chat_id=mob.GROUP_ID)
+    except Exception as exc:
+        # Do not turn transient Telegram API failures into persistent denials.
+        _iwaku_uid_whitelist.pop(user_id, None)
+        logger.warning(
+            "failed to check privilege for user %s in chat %s: %s",
+            user_id,
+            mob.GROUP_ID,
+            exc,
+        )
+        return False
+
+    allowed = any(member.user.id == user_id for member in administrators)
+    _iwaku_uid_whitelist[user_id] = (allowed, now)
+    return allowed
 
 def iwaku_history_handler() -> MessageHandler:
     jieba.setLogLevel(logger.getEffectiveLevel())
@@ -148,26 +173,11 @@ async def _iwaku_inline_callback(update: Update, context: ContextTypes.DEFAULT_T
     query_tokens = trim_tokens(query_tokens)
 
     if query_tokens:
-        # check priviledge
-        global _iwaku_uid_whitelist
-        if update.inline_query.from_user.id not in _iwaku_uid_whitelist:
-            try:
-                # update.chat_member
-                xx = await update.get_bot().get_chat_administrators(chat_id=mob.GROUP_ID)
-                if xx is None:
-                    _iwaku_uid_whitelist[update.inline_query.from_user.id] = False
-                    return
-                xx = [it.user.id for it in xx]
-                if update.inline_query.from_user.id not in xx:
-                    _iwaku_uid_whitelist[update.inline_query.from_user.id] = False
-                    return
-                _iwaku_uid_whitelist[update.inline_query.from_user.id] = True
-            except Exception as e:
-                logger.warning(f"failed to check priviledge: {e}")
-                _iwaku_uid_whitelist[update.inline_query.from_user.id] = False
-                return
-        elif not _iwaku_uid_whitelist[update.inline_query.from_user.id]: return
-
+        if not await _has_iwaku_privilege(
+            context.bot,
+            update.inline_query.from_user.id,
+        ):
+            return
 
 
         filter = {"$text": {"$search": " ".join(query_tokens)}} if mob.use_text_search else {"tokens": {"$all": query_tokens}}
