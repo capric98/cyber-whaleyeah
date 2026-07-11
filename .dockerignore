@@ -1,0 +1,17 @@
+.git
+.gitignore
+.conda
+.venv
+.vscode
+__pycache__
+*.py[cod]
+*.log
+
+database/*
+!database/recover.py
+etc/config.json
+config.json
+config.sample.json
+playground.py
+restart.sh
+README.md

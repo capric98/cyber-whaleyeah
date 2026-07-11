@@ -1,12 +1,12 @@
 {
     "log_level": "info",
     "token": "114514:YYYKYY",
-    "listen": "0.0.0.0:8888",
+    "listen": "0.0.0.0:10000",
     "↓DELETE_webhook_KEY_if_you_want_to_use_polling_mode": "",
     "webhook": "https://bot.domain.io/path",
     "secret": "optional-for-webhook-security",
     "database": {
-        "uri": "mongodb://%2Ftmp%2Fmongodb.sock",
+        "uri": "mongodb://whaleyeah-mongodb:27017",
         "db_name": "whaleyeah",
         "IWAKU_GROUP_ID": -1001145141919810
     },

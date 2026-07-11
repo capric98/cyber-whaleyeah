@@ -1,56 +1,48 @@
-version: "3"
-
 services:
-
   whaleyeah:
-    image: python:3.12
-    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cyber-whaleyeah:local
+    user: "${MYUID:-1000}:${MYGID:-1000}"
+    restart: unless-stopped
     ports:
       - "127.0.0.1:10000:10000"
-    networks:
-      - whaleyeah-network
     volumes:
-      - ./whaleyeah:/whaleyeah
-      - ./bot.py:/bot.py
-      - ./database:/data/db
-      - ./entrypoint.sh:/entrypoint.sh
-      - ./etc/config.json:/config.json
-      - ./requirements.txt:/requirements.txt
-      - whaleyeah-tmp:/tmp
-      - whaleyeah-sitepackages:/usr/local/lib/python3.12/site-packages
-
-    working_dir: /
-    command: python bot.py -c /config.json
-    entrypoint: /entrypoint.sh
+      - ./etc/config.json:/config.json:ro
     depends_on:
-      - whaleyeah-mongodb
+      whaleyeah-mongodb:
+        condition: service_healthy
+        restart: true
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
         max-size: "100m"
         max-file: "3"
 
-  # MongoDB service:
-  # You may change the mongodb server version if needed, however ensure compatibility before upgrading.
   whaleyeah-mongodb:
     image: mongodb/mongodb-community-server:8.0-ubi8
-    user: $MYUID:$MYGID
-    restart: always
+    user: "${MYUID:-1000}:${MYGID:-1000}"
+    restart: unless-stopped
     command: mongod --config /etc/mongod.conf
     volumes:
-      - ./etc/mongod.conf:/etc/mongod.conf
+      - ./etc/mongod.conf:/etc/mongod.conf:ro
       - ./database:/data/db
-      - whaleyeah-tmp:/tmp
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --host
+        - 127.0.0.1
+        - --eval
+        - 'quit(db.runCommand({ ping: 1 }).ok ? 0 : 2)'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
         max-size: "100m"
         max-file: "3"
-
-volumes:
-  whaleyeah-tmp:
-  whaleyeah-sitepackages:
-
-networks:
-  whaleyeah-network:
-    driver: bridge

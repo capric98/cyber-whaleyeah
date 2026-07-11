@@ -1,9 +1,5 @@
 #!/bin/bash
-# git pull
+set -euo pipefail
 
-# mkdir -p database
-# docker-compose rm -sf
-# MYUID="$(id -u)" MYGID="$(id -g)" docker-compose up -d
-MYUID="$(id -u)" MYGID="$(id -g)" docker-compose restart whaleyeah
-
-docker-compose logs --tail 100 -f whaleyeah
+MYUID="$(id -u)" MYGID="$(id -g)" docker compose restart whaleyeah
+docker compose logs --tail 100 -f whaleyeah
