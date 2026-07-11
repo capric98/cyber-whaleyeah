@@ -11,7 +11,7 @@ from telegramify_markdown import markdownify
 from telegramify_markdown.config import get_runtime_config
 
 from .iwaku import iwaku_history_handler, iwaku_inline_handler, iwaku_locate_handler, iwaku_plugins_copy
-from .database import init_database
+from .database import init_database, init_database_indexes
 
 
 plugins_dict = {}
@@ -62,6 +62,7 @@ def serve_config(config: PathLike) -> None:
         builder().
         token(config["token"]).
         concurrent_updates(True).
+        post_init(init_database_indexes).
         build()
     )
 
