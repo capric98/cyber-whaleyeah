@@ -1,5 +1,7 @@
 import logging
 import time
+import base64
+from copy import deepcopy
 
 import asyncio
 
@@ -7,14 +9,13 @@ from telegram import Update, Message
 from telegram.ext import ContextTypes, CommandHandler
 
 from google import genai
-from google.genai import types as genai_types
 
 from humanfriendly import parse_size
-from inflection import camelize
 
 from whaleyeah.plugins.openai_compatible import xgg_pb_link, remove_credentials
 from whaleyeah.plugins.media_extractor import extract_media, AttachmentTooLargeError, AttachmentDownloadError
 from whaleyeah.rich_message import RICH_MESSAGE_MAX_LENGTH, reply_rich_message, send_rich_message_draft
+from .interactions import InteractionStream
 
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 class GeminiBot:
     def __init__(self, config: dict) -> None:
         self.client  = genai.Client(api_key = config.get("api_key"))
-        self.model   = config.get("model", "gemini-2.5-flash-preview-09-2025")
+        self.model   = config.get("model", "gemini-3.5-flash-lite")
         self.command = config.get("command", "gemini")
 
         self.memory    = {}
@@ -36,38 +37,25 @@ class GeminiBot:
         self.max_attach_size = parse_size(config.get("max_attachment_size", "10MiB"))
 
 
-        gen_tools = []
-
+        self.tools = []
         for tool_name in config.get("tools", []):
-
-            tool_name: str  = tool_name.strip().lower()
-
-            tool_camel = camelize(tool_name, uppercase_first_letter=True)
-            tool_class = getattr(genai_types, tool_camel, None)
-            tool_rname = tool_name.removeprefix("tool_")
-
-            if tool_class is not None:
-                try:
-                    gen_tools.append(genai_types.Tool(**{tool_rname: tool_class}))
-                except Exception as e:
-                    logger.error(f"Failed to enable Gemini tool {tool_rname}: {e}")
-                else:
-                    logger.info(f"Enabling Gemini tool: {tool_rname} = {tool_class}")
-
-
-        logger.debug(f"Gemini tools:\n  {'\n  '.join([str(tool) for tool in gen_tools])}")
-        self.generate_config = genai_types.GenerateContentConfig(
-            tools=gen_tools,
-        )
+            tool_name = tool_name.strip().lower().removeprefix("tool_")
+            if tool_name in {"google_search", "url_context", "code_execution", "google_maps"}:
+                self.tools.append({"type": tool_name})
+                logger.info(f"Enabling Gemini tool: {tool_name}")
+            else:
+                logger.warning(f"Unsupported Gemini tool: {tool_name}")
 
 
     def remember(self, id: str, contents: list) -> None:
+        if not self.mem_queue:
+            return
         if id not in self.memory:
             if victim_id:=self.mem_queue.pop(0):
                 self.memory.pop(victim_id, None)
             self.mem_queue.append(id)
 
-        self.memory[id] = contents
+        self.memory[id] = deepcopy(contents)
 
 
     async def _build_gemini_content(
@@ -76,7 +64,7 @@ class GeminiBot:
         reply_target_for_errors: Message,
         is_command: bool = False,
         command: str = "",
-    ) -> genai_types.UserContent | None:
+    ) -> dict | None:
         try:
             extracted = await extract_media(
                 message=message,
@@ -96,15 +84,20 @@ class GeminiBot:
 
         parts = []
         if extracted.text:
-            parts.append(genai_types.Part.from_text(text=extracted.text))
+            parts.append({"type": "text", "text": extracted.text})
 
         for att in extracted.attachments:
-            parts.append(genai_types.Part.from_bytes(data=att.bytes, mime_type=att.mime_type))
+            media_type = att.mime_type.split("/", maxsplit=1)[0]
+            parts.append({
+                "type": media_type if media_type in {"image", "audio", "video"} else "document",
+                "mime_type": att.mime_type,
+                "data": base64.b64encode(att.bytes).decode("ascii"),
+            })
 
         if not parts:
             return None
 
-        return genai_types.UserContent(parts=parts)
+        return {"type": "user_input", "content": parts}
 
 
     def get_callback(self) -> CommandHandler:
@@ -173,7 +166,7 @@ class GeminiBot:
                 memory_id    = f"msg {reply_target.id} in chat {reply_target.chat_id}"
 
                 if memory_id in gemini.memory:
-                    contents.extend(gemini.memory[memory_id])
+                    contents.extend(deepcopy(gemini.memory[memory_id]))
                 else:
                     replied_content = await gemini._build_gemini_content(reply_target, reply_target)
                     if replied_content:
@@ -196,62 +189,53 @@ class GeminiBot:
 
                 msg = None
                 resp_text: str = ""
-                resp_image: genai_types.Image | None = None
+                resp_image: bytes | None = None
+                response = InteractionStream()
+                model_steps = None
                 last_draft_time = 0
                 last_typing_time = time.time()
 
                 try:
-                    stream = await gemini.client.aio.models.generate_content_stream(
+                    stream = await gemini.client.aio.interactions.create(
                         model=gemini.model,
-                        contents=contents,
-                        config=gemini.generate_config,
+                        input=contents,
+                        tools=gemini.tools,
+                        stream=True,
+                        store=False,
                     )
 
-                    async for chunk in stream:
-                        if not chunk.candidates or not chunk.candidates[0].content or not chunk.candidates[0].content.parts:
-                            continue
+                    async with stream:
+                        async for event in stream:
+                            response.consume(event)
+                            resp_text = response.text
+                            current_time = time.time()
 
-                        for part in chunk.candidates[0].content.parts:
-                            if part.inline_data is not None:
-                                resp_image = part.as_image()
-                            for part_attr_name in ["text", "executable_code", "code_execution_result"]:
-                                part_attr_value = getattr(part, part_attr_name, None)
-                                if part_attr_value is not None:
-                                    match part_attr_name:
-                                        case "text":
-                                            resp_text += f"{part_attr_value}"
-                                        case "executable_code":
-                                            resp_text += f"\n🛠️代码执行：\n```\n{part_attr_value.code}\n```\n"
-                                        case "code_execution_result":
-                                            resp_text += f"\n💻执行结果：\n{part_attr_value.output}\n"
-                                        case _:
-                                            resp_text += f"\n{part_attr_value}\n"
+                            if current_time - last_draft_time >= 0.5:
+                                last_draft_time = current_time
 
-                        current_time = time.time()
+                                if current_time - last_typing_time > 4.5:
+                                    last_typing_time = current_time
+                                    asyncio.create_task(reply_target.reply_chat_action("typing"))
 
-                        if current_time - last_draft_time >= 0.5:
-                            last_draft_time = current_time
+                                temp_text = resp_text.strip()
+                                if not temp_text:
+                                    continue
 
-                            if current_time - last_typing_time > 4.5:
-                                last_typing_time = current_time
-                                asyncio.create_task(reply_target.reply_chat_action("typing"))
-
-                            temp_text = resp_text.strip()
-                            if not temp_text:
-                                continue
-
-                            try:
-                                await send_rich_message_draft(
-                                    bot,
-                                    chat_id=chat_id,
-                                    draft_id=draft_id,
-                                    markdown=temp_text[:RICH_MESSAGE_MAX_LENGTH],
-                                    message_thread_id=thread_id,
-                                )
-                            except Exception as e:
-                                # Some chat types do not accept streamed drafts; keep generation running.
-                                if not any(err in str(e) for err in ("Textdraft_peer_invalid", "Random_id_invalid")):
-                                    logger.warning(f"failed to send rich draft: {e}")
+                                try:
+                                    await send_rich_message_draft(
+                                        bot,
+                                        chat_id=chat_id,
+                                        draft_id=draft_id,
+                                        markdown=temp_text[:RICH_MESSAGE_MAX_LENGTH],
+                                        message_thread_id=thread_id,
+                                    )
+                                except Exception as e:
+                                    # Some chat types do not accept streamed drafts; keep generation running.
+                                    if not any(err in str(e) for err in ("Textdraft_peer_invalid", "Random_id_invalid")):
+                                        logger.warning(f"failed to send rich draft: {e}")
+                    steps = response.finish()
+                    resp_image = response.image_bytes
+                    model_steps = steps
 
                 except Exception as e:
                     error_str = remove_credentials(f"{e}", bot.token.split(":"))
@@ -281,37 +265,31 @@ class GeminiBot:
                                 logger.warning(f"failed to send rich message: {e}")
                                 msg = await reply_target.reply_text(resp_text)
 
-                        # Clear draft
-                        try:
-                            await send_rich_message_draft(
-                                bot,
-                                chat_id=chat_id,
-                                draft_id=draft_id,
-                                markdown="",
-                                message_thread_id=thread_id,
-                            )
-                        except Exception:
-                            pass
-
                     # If there's an image, send it as well.
                     if resp_image:
-                        imsg = await reply_target.reply_photo(photo=resp_image.image_bytes) # type: ignore
+                        imsg = await reply_target.reply_photo(photo=resp_image)
                         msg = msg if msg else imsg # prefer text message as msg
 
                     # If reply successful, remember the conversation.
-                    if msg and resp_text:
-                        contents.append(
-                            genai_types.Content(
-                                role="model",
-                                parts=[genai_types.Part.from_text(text=resp_text)],
-                            )
-                        )
+                    if msg and model_steps is not None:
+                        contents.extend(model_steps)
                         gemini.remember(f"msg {msg.id} in chat {msg.chat_id}", contents=contents)
 
                 except Exception as e:
                     logger.error(e)
                     error_str = remove_credentials(f"{e}", update.get_bot().token.split(":"))
                     await reply_target.reply_text(error_str)
+                finally:
+                    try:
+                        await send_rich_message_draft(
+                            bot,
+                            chat_id=chat_id,
+                            draft_id=draft_id,
+                            markdown="",
+                            message_thread_id=thread_id,
+                        )
+                    except Exception:
+                        pass
 
 
 
