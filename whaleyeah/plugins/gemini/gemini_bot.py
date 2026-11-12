@@ -9,6 +9,7 @@ from telegram import Update, Message
 from telegram.ext import ContextTypes, CommandHandler
 
 from google import genai
+from google.genai import types
 
 from humanfriendly import parse_size
 
@@ -24,9 +25,13 @@ logger = logging.getLogger(__name__)
 
 class GeminiBot:
     def __init__(self, config: dict) -> None:
-        self.client  = genai.Client(api_key = config.get("api_key"))
+        self.client  = genai.Client(
+            api_key=config.get("api_key"),
+            http_options=types.HttpOptions(api_version="v1beta"),
+        )
         self.model   = config.get("model", "gemini-3.5-flash-lite")
         self.command = config.get("command", "gemini")
+        self.generation_config = config.get("generation_config", {})
 
         self.memory    = {}
         self.mem_queue: list[None|str] = [None] * int(config.get("memory_size", 10))
@@ -200,6 +205,7 @@ class GeminiBot:
                         model=gemini.model,
                         input=contents,
                         tools=gemini.tools,
+                        generation_config=gemini.generation_config,
                         stream=True,
                         store=False,
                     )

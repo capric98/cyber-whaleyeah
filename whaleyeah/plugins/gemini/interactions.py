@@ -26,7 +26,9 @@ def _merge_delta(target: dict, delta: dict) -> None:
         elif isinstance(value, list) and isinstance(target.get(key), list):
             target[key].extend(deepcopy(value))
         elif key in {"code", "result"} and isinstance(value, str):
-            target[key] = target.get(key, "") + value
+            # Tool steps may start with null code or result placeholders.
+            previous = target.get(key)
+            target[key] = (previous if previous is not None else "") + value
         else:
             target[key] = deepcopy(value)
 
@@ -38,6 +40,12 @@ def _append_content(contents: list[dict], content: dict) -> None:
             contents[-1].setdefault("annotations", []).extend(content["annotations"])
     else:
         contents.append(deepcopy(content))
+
+
+def _step_contents(step: dict) -> list[dict]:
+    if step["type"] == "code_execution_result" and isinstance(step.get("result"), list):
+        return step["result"]
+    return step.get("content") or []
 
 
 class InteractionStream:
@@ -124,8 +132,11 @@ class InteractionStream:
                     if code:
                         parts.append(f"\n🛠️代码执行：\n```\n{code}\n```\n")
                 case "code_execution_result":
-                    if step.get("result"):
-                        parts.append(f"\n💻执行结果：\n{step['result']}\n")
+                    result = step.get("result")
+                    if isinstance(result, list):
+                        result = "".join(item.get("text", "") for item in result if item.get("type") == "text")
+                    if isinstance(result, str) and result:
+                        parts.append(f"\n💻执行结果：\n{result}\n")
         return "".join(parts)
 
     @property
@@ -134,7 +145,7 @@ class InteractionStream:
         images = [
             item
             for index in sorted(self._steps)
-            for item in self._steps[index].get("content", [])
+            for item in _step_contents(self._steps[index])
             if item["type"] == "image" and item.get("data")
         ]
         return base64.b64decode(images[-1]["data"]) if images else None

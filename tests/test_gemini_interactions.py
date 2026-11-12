@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, patch
 
-import httpx
+import httpx2
 from google import genai
 from google.genai import interactions, types
 
@@ -83,8 +83,8 @@ class StreamTests(unittest.TestCase):
             {"type": "google_search_result", "call_id": "search1", "result": []},
             {"type": "url_context_call", "id": "url1", "arguments": {}},
             {"type": "url_context_result", "call_id": "url1", "result": []},
-            {"type": "code_execution_call", "id": "code1", "arguments": {}},
-            {"type": "code_execution_result", "call_id": "code1", "result": ""},
+            {"type": "code_execution_call", "id": "code1", "arguments": {"code": None}},
+            {"type": "code_execution_result", "call_id": "code1", "result": None},
         ]
         deltas = [
             {"type": "google_search_call", "arguments": {"queries": ["test"]}, "signature": "YWJj"},
@@ -127,6 +127,32 @@ class StreamTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "requires_action"):
             stream.consume(completed("requires_action"))
 
+    def test_sdk_multimodal_tool_results_preserve_content_and_unknown_fields(self):
+        contents = [
+            {"type": "text", "text": "541\n"},
+            {"type": "image", "mime_type": "image/png", "data": base64.b64encode(b"plot").decode()},
+        ]
+        for streamed in [False, True]:
+            with self.subTest(streamed=streamed):
+                stream = InteractionStream()
+                step = {"type": "code_execution_result", "call_id": "code1",
+                        "result": [] if streamed else contents, "signature": "YWJj",
+                        "future_metadata": {"retained": True}}
+                stream.consume(interactions.StepStart.model_validate(start(0, step)))
+                if streamed:
+                    stream.consume(delta(0, {
+                        "type": "code_execution_result", "result": contents,
+                    }))
+                stream.consume(interactions.StepStop.model_validate(stop(0)))
+                stream.consume(completed())
+                result = stream.finish()[0]
+                self.assertEqual(result["result"], contents)
+                self.assertEqual(result["signature"], "YWJj")
+                self.assertEqual(result["future_metadata"], {"retained": True})
+                self.assertIn("541\n", stream.text)
+                self.assertNotIn(contents[1]["data"], stream.text)
+                self.assertEqual(stream.image_bytes, b"plot")
+
     def test_missing_completion_and_unfinished_steps_are_rejected(self):
         stream = InteractionStream()
         for event in text_events()[:-1]:
@@ -157,21 +183,26 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.events = text_events()
         self.requests = []
+        self.request_urls = []
 
         def serve(request):
             self.requests.append(json.loads(request.content))
+            self.request_urls.append(request.url)
             content = "".join(
                 f"event: {event['event_type']}\ndata: {json.dumps(event)}\n\n"
                 for event in self.events
             ) + "event: done\ndata: [DONE]\n\n"
-            return httpx.Response(200, headers={"Content-Type": "text/event-stream"}, content=content)
+            return httpx2.Response(200, headers={"Content-Type": "text/event-stream"}, content=content)
 
-        self.client = genai.Client(
-            api_key="test-key",
-            http_options=types.HttpOptions(async_client_args={"transport": httpx.MockTransport(serve)}),
-        )
-        with patch("whaleyeah.plugins.gemini.gemini_bot.genai.Client", return_value=self.client):
+        make_client = genai.Client
+
+        def client_with_transport(**kwargs):
+            kwargs["http_options"].async_client_args = {"transport": httpx2.MockTransport(serve)}
+            return make_client(**kwargs)
+
+        with patch("whaleyeah.plugins.gemini.gemini_bot.genai.Client", side_effect=client_with_transport):
             self.bot = GeminiBot({"api_key": "test-key", "memory_size": 2, "tools": ["google_search"]})
+        self.client = self.bot.client
         self.bot.whitelist_cache[42] = True
         self.telegram = SimpleNamespace(name="@whale", token="123456:secret")
         self.rich_reply = self.message("Hello", id=100)
@@ -217,6 +248,7 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
     async def test_real_sdk_stream_request_and_complete_history_round_trip(self):
         await self.call()
         request = self.requests[0]
+        self.assertEqual(self.request_urls[0].path, "/v1beta/interactions")
         self.assertEqual(request["model"], "gemini-3.5-flash-lite")
         self.assertFalse(request["store"])
         self.assertTrue(request["stream"])
@@ -244,7 +276,28 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("msg 100 in chat 10", self.bot.memory)
         self.assertEqual(len(self.bot.memory), 2)
 
-    async def test_real_sdk_tool_history_round_trip(self):
+    async def test_configured_thinking_and_tool_alias_reach_each_sdk_request(self):
+        with patch("whaleyeah.plugins.gemini.gemini_bot.genai.Client", return_value=self.client):
+            self.bot = GeminiBot({
+                "api_key": "test-key",
+                "model": "gemini-4-hydrogen",
+                "generation_config": {"thinking_level": "high"},
+                "tools": ["google_search", "tool_code_execution"],
+            })
+        self.bot.whitelist_cache[42] = True
+
+        await self.call()
+        await self.call(self.message("/gemini follow up", reply=self.rich_reply))
+
+        self.assertEqual(len(self.requests), 2)
+        for request in self.requests:
+            self.assertEqual(request["model"], "gemini-4-hydrogen")
+            self.assertEqual(request["generation_config"], {"thinking_level": "high"})
+            self.assertEqual(request["tools"], [
+                {"type": "google_search"}, {"type": "code_execution"},
+            ])
+
+    async def test_real_sdk_tool_history_with_null_result_round_trip(self):
         self.events = [
             start(0, {"type": "google_search_call", "id": "s1", "arguments": {"queries": []}}),
             delta(0, {"type": "google_search_call", "arguments": {"queries": ["test"]}, "signature": "YWJj"}),
@@ -255,8 +308,9 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
             start(2, {"type": "code_execution_call", "id": "c1", "arguments": {"code": "", "language": "python"}}),
             delta(2, {"type": "code_execution_call", "arguments": {"code": "print(1)", "language": "python"}, "signature": "ZGVm"}),
             stop(2),
-            start(3, {"type": "code_execution_result", "call_id": "c1", "result": ""}),
+            start(3, {"type": "code_execution_result", "call_id": "c1", "result": None}),
             delta(3, {"type": "code_execution_result", "result": "1", "is_error": False}),
+            delta(3, {"type": "code_execution_result", "result": "\n"}),
             stop(3),
             start(4, {"type": "model_output"}),
             delta(4, {"type": "text", "text": "Answer"}),
@@ -264,9 +318,11 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
             completed(),
         ]
         await self.call()
+        self.assertNotIn("生成内容时出错", self.reply.await_args.kwargs["markdown"])
         history = deepcopy(self.bot.memory["msg 100 in chat 10"])
         self.assertEqual(history[1]["signature"], "YWJj")
         self.assertEqual(history[3]["arguments"]["code"], "print(1)")
+        self.assertEqual(history[4]["result"], "1\n")
         self.assertIn("代码执行", self.reply.await_args.kwargs["markdown"])
         await self.call(self.message("/gemini continue", reply=self.rich_reply))
         self.assertEqual(self.requests[1]["input"][:-1], history)
@@ -281,6 +337,31 @@ class BotTests(unittest.IsolatedAsyncioTestCase):
         paste.assert_awaited_once_with(text=answer, title="hi")
         message.reply_text.assert_awaited_once_with("https://example.com/paste")
         self.assertEqual(self.bot.memory["msg 200 in chat 10"][-1]["content"][0]["text"], answer)
+
+    async def test_multimodal_tool_result_is_delivered_and_replayed(self):
+        contents = [
+            {"type": "text", "text": "541\n"},
+            {"type": "image", "mime_type": "image/png", "data": base64.b64encode(b"plot").decode()},
+        ]
+        self.events = [
+            start(0, {"type": "code_execution_call", "id": "code1",
+                      "arguments": {"code": "print(541)", "language": "python"}, "signature": "YWJj"}),
+            stop(0),
+            start(1, {"type": "code_execution_result", "call_id": "code1", "result": contents}),
+            stop(1),
+            start(2, {"type": "model_output"}),
+            delta(2, {"type": "text", "text": "The 100th prime is 541."}),
+            stop(2), completed(),
+        ]
+        message = self.message()
+        await self.call(message)
+        message.reply_photo.assert_awaited_once_with(photo=b"plot")
+        self.assertIn("541", self.reply.await_args.kwargs["markdown"])
+        self.assertNotIn(contents[1]["data"], self.reply.await_args.kwargs["markdown"])
+        history = deepcopy(self.bot.memory["msg 100 in chat 10"])
+        self.assertEqual(history[2]["result"], contents)
+        await self.call(self.message("/gemini continue", reply=self.rich_reply))
+        self.assertEqual(self.requests[1]["input"][:-1], history)
 
     async def test_sdk_error_event_is_reported_and_does_not_enter_memory(self):
         self.events = [*text_events()[:-1], {"event_type": "error", "error": {"code": "gateway_timeout", "message": "deadline expired"}}]

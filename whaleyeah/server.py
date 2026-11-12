@@ -39,6 +39,7 @@ def serve_config(config: PathLike) -> None:
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpx2").setLevel(logging.WARNING)
     logger = logging.getLogger(__name__)
 
 

@@ -13,5 +13,5 @@ etc/config.json
 config.json
 config.sample.json
 playground.py
-restart.sh
+control.sh
 README.md

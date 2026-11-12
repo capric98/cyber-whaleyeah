@@ -268,14 +268,15 @@ class OpenAICompatibleBot:
                     stream=True,
                     **create_params,
                 )
-                async for event in stream:
-                    event_type = getattr(event, "type", None)
-                    if event_type == "response.output_text.delta":
-                        delta_val = getattr(event, "delta", None)
-                        if delta_val is not None:
-                            yield delta_val
-                    elif event_type == "error":
-                        raise RuntimeError(getattr(event, "message", "OpenAI streaming error"))
+                async with stream:
+                    async for event in stream:
+                        event_type = getattr(event, "type", None)
+                        if event_type == "response.output_text.delta":
+                            delta_val = getattr(event, "delta", None)
+                            if delta_val is not None:
+                                yield delta_val
+                        elif event_type == "error":
+                            raise RuntimeError(getattr(event, "message", "OpenAI streaming error"))
             else:
                 resp = await self.client.responses.create(
                     model=self.model,
@@ -293,12 +294,13 @@ class OpenAICompatibleBot:
                 stream=True,
                 **create_params,
             )
-            async for chunk in stream:
-                if not chunk.choices:
-                    continue
-                delta = chunk.choices[0].delta
-                if delta.content:
-                    yield delta.content
+            async with stream:
+                async for chunk in stream:
+                    if not chunk.choices:
+                        continue
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        yield delta.content
         else:
             resp = await self.client.chat.completions.create(
                 messages=request_messages,
